@@ -53,7 +53,8 @@ function defaultSaveData() {
     continueSpeed: 245, continueDashCooldown: 1.2, continueThrowSpeed: 610, continuePickupRange: 84,
     continueDefense: 0, continueLuck: 0, continuePiercingInkRooms: 0, continueEchoScrollRooms: 0,
     continueSpeedBoostRooms: 0, continueThrowBoostRooms: 0, continueDashBoostRooms: 0, continuePickupBoostRooms: 0,
-    continueTempSpeedBonus: 0, continueTempThrowBonus: 0, continueTempDashBonus: 0, continueTempPickupBonus: 0
+    continueTempSpeedBonus: 0, continueTempThrowBonus: 0, continueTempDashBonus: 0, continueTempPickupBonus: 0,
+    coins: 0, ownedPets: []
   };
 }
 
@@ -135,6 +136,7 @@ let mouseLeftDown = false;
 let mouse = { x: W / 2, y: H / 2 };
 let lastMoveDir = new Vec2(0, 1);
 let showStartHealNotice = false;
+let shopOpen = false;
 
 /* ---------- 工厂函数 ---------- */
 function makePlayer() {
@@ -142,7 +144,8 @@ function makePlayer() {
     pos: new Vec2(W / 2, H / 2 + 120), radius: 18, hp: 100, maxHp: 100,
     speed: 245, dashCooldown: 1.2, dashTimer: 0, throwSpeed: 610, pickupRange: 84,
     defense: 0, memoryBonus: 0, luck: 0, invulnerable: 0, speedBoost: 0, shieldTime: 0,
-    piercingInk: false, echoScroll: false, heldMeaning: '', healingSyringes: 0
+    piercingInk: false, echoScroll: false, heldMeaning: '', healingSyringes: 0,
+    throwDamageBonus: 0, flatDamageReduction: 0
   };
 }
 
@@ -254,6 +257,7 @@ function startGame(maxDifficulty, modeName, enterFirstRoom = true) {
     player.healingSyringes = 5;
     showStartHealNotice = true;
   }
+  applyPetEffects();
   monsters = []; meanings = []; projectiles = []; enemyProjectiles = [];
   drops = []; chests = []; floatingTexts = []; obstacles = [];
   runWords = []; roomLog = [];
@@ -269,6 +273,15 @@ function startGame(maxDifficulty, modeName, enterFirstRoom = true) {
   rewardCards = [];
 
   if (enterFirstRoom) startRoom(true);
+}
+
+function applyPetEffects() {
+  if (!saveData || !saveData.ownedPets) return;
+  if (saveData.ownedPets.includes('bat')) player.speed *= 1.08;
+  if (saveData.ownedPets.includes('fairy')) { player.maxHp += 15; player.hp += 15; }
+  if (saveData.ownedPets.includes('hedgehog')) player.flatDamageReduction = 1;
+  if (saveData.ownedPets.includes('owl')) player.pickupRange += 40;
+  if (saveData.ownedPets.includes('dragon')) player.throwDamageBonus = 0.15;
 }
 
 function continueGame() {
@@ -948,6 +961,7 @@ function updateMonsters(dt) {
       let damage = 12 + m.entry.difficulty * 1.8;
       damage *= 1 + m.ragePower;
       damage *= 1 - player.defense;
+      damage = Math.max(1, damage - player.flatDamageReduction);
       if (player.shieldTime > 0) damage *= 0.55;
       player.hp -= damage;
       player.invulnerable = 0.55;
@@ -1054,6 +1068,7 @@ function updateEnemyProjectiles(dt) {
 
     if (!remove && dist(bullet.pos.x, bullet.pos.y, player.pos.x, player.pos.y) < player.radius + 9 && player.invulnerable <= 0) {
       let damage = bullet.damage * (1 - player.defense);
+      damage = Math.max(1, damage - player.flatDamageReduction);
       if (player.shieldTime > 0) damage *= 0.55;
       player.hp -= damage;
       player.invulnerable = 0.42;
@@ -1110,6 +1125,7 @@ function resolveHit(p, m) {
 
     triggerRage(m, 0.25, 1.6);
     let damage = m.maxHp >= 2 ? 1 : 99;
+    damage *= 1 + player.throwDamageBonus;
     if (combo >= 3) {
       damage += 1;
       player.hp = Math.min(player.maxHp, player.hp + 4);
@@ -1163,6 +1179,11 @@ function returnProjectileMeaning(p) {
 
 function killMonster(m) {
   addFloat('记住 ' + m.entry.word, m.pos.add(new Vec2(0, -58)), [255, 255, 255]);
+  const coins = coinRewardForMonster(m);
+  if (coins > 0) {
+    saveData.coins += coins;
+    addFloat('+' + coins + ' 金币', m.pos.add(new Vec2(0, -38)), [255, 214, 92]);
+  }
   const lastMonster = monsters.length === 1;
   if (Math.random() < 0.16 + player.luck) {
     const kind = randomDropKind();
@@ -1170,6 +1191,15 @@ function killMonster(m) {
     else drops.push({ kind, pos: m.pos, life: 16 });
   }
   monsters.splice(monsters.indexOf(m), 1);
+}
+
+function coinRewardForMonster(m) {
+  let reward = 3 + m.entry.difficulty * 2;
+  reward += (m.maxHp - 1) * 3;
+  reward += Math.min(6, Math.floor(room / 2));
+  if (m.kind === KIND.SHIELD || m.kind === KIND.GHOST) reward += 2;
+  else if (m.kind === KIND.CHASER || m.kind === KIND.DASHER) reward += 1;
+  return Math.floor(reward);
 }
 
 const DROP_KEYS = Object.keys(DROP);
@@ -1678,6 +1708,18 @@ function menuContinueRect() {
   return { left: 610, top: 588, right: 1000, bottom: 588 + 56 };
 }
 
+function menuShopRect() {
+  return { left: 610, top: 500, right: 1000, bottom: 556 };
+}
+
+const SHOP_PETS = [
+  { id: 'bat', name: '小蝙蝠', desc: '移动速度 +8%', price: 80 },
+  { id: 'fairy', name: '小妖精', desc: '最大生命 +15', price: 120 },
+  { id: 'hedgehog', name: '小刺猬', desc: '受到伤害 -1（最少1点）', price: 200 },
+  { id: 'owl', name: '猫头鹰', desc: '拾取范围 +40', price: 300 },
+  { id: 'dragon', name: '小金龙', desc: '弹丸伤害 +15%', price: 500 }
+];
+
 function drawMenu() {
   ctx.fillStyle = '#0b1018';
   ctx.fillRect(0, 0, W, H);
@@ -1746,12 +1788,29 @@ function drawMenu() {
     ctx.restore();
   }
 
+  const shop = menuShopRect();
+  ctx.save();
+  ctx.fillStyle = 'rgba(97,74,122,0.9)';
+  roundRectPath(shop.left, shop.top, shop.right - shop.left, shop.bottom - shop.top, 10);
+  ctx.fill();
+  ctx.strokeStyle = 'rgba(190,150,226,0.9)';
+  ctx.lineWidth = 2;
+  ctx.stroke();
+  ctx.font = 'bold 18px ' + FONT_UI;
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.fillStyle = '#f0e2ff';
+  ctx.fillText('宠物商城（金币 ' + (saveData ? saveData.coins : 0) + '）', (shop.left + shop.right) / 2, (shop.top + shop.bottom) / 2);
+  ctx.restore();
+
   ctx.save();
   ctx.font = '14px ' + FONT_UI;
   ctx.textAlign = 'center';
   ctx.fillStyle = 'rgba(160,175,195,0.65)';
   ctx.fillText('WASD/方向键移动 · 鼠标瞄准 · 左键发射中文词块 · E 拾取 · Space 闪避 · Q 护盾 · H 治疗针剂 · Tab 记忆书 · F11 全屏', W / 2, 672);
   ctx.restore();
+
+  if (shopOpen) drawShop();
 }
 
 function drawDifficultyButton(i, diff) {
@@ -2259,6 +2318,8 @@ function drawHud(t) {
   ctx.fillStyle = 'rgba(190,205,225,0.8)';
   ctx.textAlign = 'right';
   ctx.fillText('E 拾取 · 左键发射', W - 18, 40);
+  ctx.fillStyle = '#ffd65c';
+  ctx.fillText('金币 ' + (saveData ? saveData.coins : 0), W - 18, 56);
 
   if (message) {
     ctx.save();
@@ -2498,6 +2559,10 @@ function pointInMenuRect(p, r) {
 }
 
 function handleMenuClick(p) {
+  if (shopOpen) {
+    handleShopClick(p);
+    return;
+  }
   for (let i = 0; i < MENU_DIFFS.length; i++) {
     if (pointInMenuRect(p, menuDifficultyRect(i))) {
       playSound('ui_click');
@@ -2514,6 +2579,102 @@ function handleMenuClick(p) {
   if (saveData && saveData.hasContinue && pointInMenuRect(p, menuContinueRect())) {
     playSound('ui_click');
     continueGame();
+    return;
+  }
+  if (pointInMenuRect(p, menuShopRect())) {
+    playSound('ui_click');
+    shopOpen = true;
+  }
+}
+
+function shopPetRect(i) {
+  return { left: 280, top: 200 + i * 74, right: 1000, bottom: 200 + i * 74 + 62 };
+}
+
+function shopCloseRect() {
+  return { left: 570, top: 600, right: 710, bottom: 634 };
+}
+
+function drawShop() {
+  ctx.fillStyle = 'rgba(6,8,12,0.62)';
+  ctx.fillRect(0, 0, W, H);
+  ctx.save();
+  ctx.fillStyle = 'rgba(22,28,36,0.97)';
+  roundRectPath(240, 78, 800, 570, 10);
+  ctx.fill();
+  ctx.strokeStyle = 'rgba(160,120,220,0.7)';
+  ctx.lineWidth = 2;
+  ctx.stroke();
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.font = 'bold 30px ' + FONT_UI;
+  ctx.fillStyle = '#f0e2ff';
+  ctx.fillText('宠物商城', W / 2, 128);
+  ctx.font = '15px ' + FONT_UI;
+  ctx.fillStyle = '#ffd65c';
+  ctx.fillText('金币 ' + saveData.coins + '  打怪可得金币，数量随怪物强度提升', W / 2, 170);
+  for (let i = 0; i < SHOP_PETS.length; i++) drawShopPetCard(i);
+  const close = shopCloseRect();
+  roundRectPath(close.left, close.top, close.right - close.left, close.bottom - close.top, 8);
+  ctx.fillStyle = 'rgba(120,56,64,0.95)';
+  ctx.fill();
+  ctx.strokeStyle = 'rgba(220,120,130,0.8)';
+  ctx.lineWidth = 1.5;
+  ctx.stroke();
+  ctx.font = 'bold 15px ' + FONT_UI;
+  ctx.fillStyle = '#ffdce0';
+  ctx.fillText('关闭（Esc）', (close.left + close.right) / 2, (close.top + close.bottom) / 2);
+  ctx.restore();
+}
+
+function drawShopPetCard(i) {
+  const pet = SHOP_PETS[i];
+  const r = shopPetRect(i);
+  const owned = saveData.ownedPets.includes(pet.id);
+  const canBuy = !owned && saveData.coins >= pet.price;
+  const hover = pointInMenuRect(mouse, r);
+  ctx.save();
+  roundRectPath(r.left, r.top, r.right - r.left, r.bottom - r.top, 8);
+  ctx.fillStyle = owned ? 'rgba(36,52,44,0.96)' : (hover ? (canBuy ? 'rgba(62,74,92,0.96)' : 'rgba(48,54,62,0.96)') : 'rgba(42,50,62,0.96)');
+  ctx.fill();
+  ctx.strokeStyle = owned ? 'rgba(120,220,150,0.9)' : (canBuy ? 'rgba(210,180,110,0.9)' : 'rgba(90,100,116,0.8)');
+  ctx.lineWidth = 1.5;
+  ctx.stroke();
+  ctx.textAlign = 'left';
+  ctx.textBaseline = 'middle';
+  ctx.font = 'bold 17px ' + FONT_UI;
+  ctx.fillStyle = '#fff';
+  ctx.fillText(pet.name, r.left + 20, r.top + 16);
+  ctx.font = '13px ' + FONT_UI;
+  ctx.fillStyle = 'rgba(186,200,214,0.95)';
+  ctx.fillText(pet.desc, r.left + 20, r.top + 42);
+  ctx.textAlign = 'right';
+  ctx.font = 'bold 15px ' + FONT_UI;
+  if (owned) { ctx.fillStyle = '#8ce6a5'; ctx.fillText('已拥有', r.right - 20, r.top + 30); }
+  else if (canBuy) { ctx.fillStyle = '#ffd65c'; ctx.fillText('购买 ' + pet.price + ' 金币', r.right - 20, r.top + 30); }
+  else { ctx.fillStyle = 'rgba(180,190,200,0.9)'; ctx.fillText('金币不足 ' + pet.price, r.right - 20, r.top + 30); }
+  ctx.restore();
+}
+
+function handleShopClick(p) {
+  if (pointInMenuRect(p, shopCloseRect())) {
+    playSound('ui_click');
+    shopOpen = false;
+    return;
+  }
+  for (let i = 0; i < SHOP_PETS.length; i++) {
+    if (!pointInMenuRect(p, shopPetRect(i))) continue;
+    const pet = SHOP_PETS[i];
+    if (saveData.ownedPets.includes(pet.id)) return;
+    if (saveData.coins < pet.price) {
+      playSound('hit_correct');
+      return;
+    }
+    saveData.coins -= pet.price;
+    saveData.ownedPets.push(pet.id);
+    playSound('ui_click');
+    persistSave();
+    return;
   }
 }
 
@@ -2550,6 +2711,7 @@ document.addEventListener('keydown', (e) => {
   keys.add(e.code);
 
   if (state === STATE.MENU) {
+    if (e.code === 'Escape') { e.preventDefault(); shopOpen = false; return; }
     if (e.code === 'Enter') {
       e.preventDefault();
       playSound('ui_click');
