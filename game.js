@@ -70,7 +70,82 @@ function loadSave() {
 }
 
 function persistSave() {
-  try { localStorage.setItem('vocabRogueSave', JSON.stringify(saveData)); } catch (e) { /* ignore */ }
+  if (currentUser && accounts[currentUser]) {
+    accounts[currentUser].saveData = saveData;
+    try { localStorage.setItem('vocabRogueAccounts', JSON.stringify(accounts)); } catch (e) { /* ignore */ }
+  } else {
+    try { localStorage.setItem('vocabRogueSave', JSON.stringify(saveData)); } catch (e) { /* ignore */ }
+  }
+}
+
+function loadAccountsDB() {
+  try { return JSON.parse(localStorage.getItem('vocabRogueAccounts')) || {}; } catch (e) { return {}; }
+}
+
+function bytesToHex(bytes) {
+  let s = '';
+  for (let i = 0; i < bytes.length; i++) {
+    const hex = bytes[i].toString(16);
+    s += hex.length === 1 ? '0' + hex : hex;
+  }
+  return s;
+}
+
+async function hashPassword(password, saltHex) {
+  const enc = new TextEncoder();
+  const data = enc.encode(saltHex + ':' + password);
+  const buf = await crypto.subtle.digest('SHA-256', data);
+  return bytesToHex(new Uint8Array(buf));
+}
+
+function genSaltHex() {
+  const arr = new Uint8Array(8);
+  crypto.getRandomValues(arr);
+  return bytesToHex(arr);
+}
+
+async function tryRegister(username, password, confirmPwd) {
+  if (!username || username.length < 3 || username.length > 20) return '账号需 3-20 个字符';
+  if (!/^[a-zA-Z0-9_\u4e00-\u9fa5]+$/.test(username)) return '账号仅支持字母、数字、下划线或中文';
+  if (!password || password.length < 6) return '密码至少 6 位';
+  if (password !== confirmPwd) return '两次输入的密码不一致';
+  if (accounts[username]) return '该账号已存在，请直接登录';
+  const salt = genSaltHex();
+  const hash = await hashPassword(password, salt);
+  accounts[username] = { salt: salt, hash: hash, saveData: defaultSaveData() };
+  try { localStorage.setItem('vocabRogueAccounts', JSON.stringify(accounts)); } catch (e) {}
+  currentUser = username;
+  localStorage.setItem('vocabRogueCurrentUser', currentUser);
+  return null;
+}
+
+async function tryLogin(username, password) {
+  if (!username) return '请输入账号';
+  if (!password) return '请输入密码';
+  const acc = accounts[username];
+  if (!acc) return '账号不存在，请先注册';
+  const hash = await hashPassword(password, acc.salt);
+  if (hash !== acc.hash) return '密码错误';
+  currentUser = username;
+  localStorage.setItem('vocabRogueCurrentUser', currentUser);
+  saveData = acc.saveData || defaultSaveData();
+  return null;
+}
+
+function loginGuest() {
+  currentUser = null;
+  localStorage.removeItem('vocabRogueCurrentUser');
+  saveData = loadSave();
+}
+
+function logout() {
+  if (currentUser && accounts[currentUser]) {
+    accounts[currentUser].saveData = saveData;
+    try { localStorage.setItem('vocabRogueAccounts', JSON.stringify(accounts)); } catch (e) {}
+  }
+  currentUser = null;
+  localStorage.removeItem('vocabRogueCurrentUser');
+  location.reload();
 }
 
 function mergeSavedStats() {
@@ -137,6 +212,8 @@ let mouse = { x: W / 2, y: H / 2 };
 let lastMoveDir = new Vec2(0, 1);
 let showStartHealNotice = false;
 let shopOpen = false;
+let accounts = {};
+let currentUser = null;
 
 /* ---------- 工厂函数 ---------- */
 function makePlayer() {
@@ -1712,6 +1789,10 @@ function menuShopRect() {
   return { left: 610, top: 500, right: 1000, bottom: 556 };
 }
 
+function menuLogoutRect() {
+  return { left: 850, top: 198, right: 1100, bottom: 230 };
+}
+
 const SHOP_PETS = [
   { id: 'bat', name: '小蝙蝠', desc: '移动速度 +8%', price: 80 },
   { id: 'fairy', name: '小妖精', desc: '最大生命 +15', price: 120 },
@@ -1739,6 +1820,28 @@ function drawMenu() {
   ctx.fillStyle = 'rgba(190,205,225,0.85)';
   ctx.fillText('Word Realm Roguelike · 网页版', W / 2, 168);
   ctx.restore();
+
+  if (currentUser) {
+    ctx.save();
+    ctx.font = '13px ' + FONT_UI;
+    ctx.textAlign = 'right';
+    ctx.textBaseline = 'middle';
+    ctx.fillStyle = 'rgba(190,205,225,0.85)';
+    ctx.fillText('当前账号：' + currentUser, 1100, 168);
+    const lo = menuLogoutRect();
+    const loHover = pointInMenuRect(mouse, lo);
+    roundRectPath(lo.left, lo.top, lo.right - lo.left, lo.bottom - lo.top, 8);
+    ctx.fillStyle = loHover ? 'rgba(120,56,64,0.9)' : 'rgba(80,46,54,0.75)';
+    ctx.fill();
+    ctx.strokeStyle = 'rgba(220,120,130,0.85)';
+    ctx.lineWidth = 1.5;
+    ctx.stroke();
+    ctx.font = 'bold 14px ' + FONT_UI;
+    ctx.textAlign = 'center';
+    ctx.fillStyle = '#ffdce0';
+    ctx.fillText('退出登录', (lo.left + lo.right) / 2, (lo.top + lo.bottom) / 2);
+    ctx.restore();
+  }
 
   for (let i = 0; i < MENU_DIFFS.length; i++) {
     drawDifficultyButton(i, MENU_DIFFS[i]);
@@ -2671,6 +2774,10 @@ function handleMenuClick(p) {
     playSound('ui_click');
     shopOpen = true;
   }
+  if (currentUser && pointInMenuRect(p, menuLogoutRect())) {
+    playSound('ui_click');
+    logout();
+  }
 }
 
 function shopPetRect(i) {
@@ -2884,8 +2991,83 @@ function frame(now) {
 }
 
 /* ---------- 启动 ---------- */
+function setupLoginUI() {
+  const userInput = document.getElementById('login-username');
+  const passInput = document.getElementById('login-password');
+  const pass2Input = document.getElementById('login-password2');
+  const errorDiv = document.getElementById('login-error');
+  const submitBtn = document.getElementById('login-submit');
+  const guestBtn = document.getElementById('login-guest');
+  const tabs = document.querySelectorAll('.login-tab');
+  let mode = 'login';
+
+  function setMode(m) {
+    mode = m;
+    tabs.forEach(t => t.classList.toggle('active', t.dataset.mode === m));
+    pass2Input.style.display = (m === 'register') ? 'block' : 'none';
+    submitBtn.textContent = (m === 'login') ? '登录' : '注册';
+    errorDiv.textContent = '';
+    userInput.value = '';
+    passInput.value = '';
+    pass2Input.value = '';
+    setTimeout(() => userInput.focus(), 30);
+  }
+
+  async function doSubmit() {
+    const u = userInput.value.trim();
+    const p = passInput.value;
+    errorDiv.textContent = '';
+    submitBtn.disabled = true;
+    try {
+      let err = null;
+      if (mode === 'register') err = await tryRegister(u, p, pass2Input.value);
+      else err = await tryLogin(u, p);
+      if (err) { errorDiv.textContent = err; return; }
+      finishAuth();
+    } finally {
+      submitBtn.disabled = false;
+    }
+  }
+
+  function finishAuth() {
+    const loginEl = document.getElementById('login');
+    if (loginEl) loginEl.style.display = 'none';
+    startGameBoot();
+  }
+
+  tabs.forEach(t => t.addEventListener('click', () => setMode(t.dataset.mode)));
+  submitBtn.addEventListener('click', doSubmit);
+  guestBtn.addEventListener('click', () => {
+    loginGuest();
+    finishAuth();
+  });
+  userInput.addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); passInput.focus(); } });
+  passInput.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      if (mode === 'register') pass2Input.focus();
+      else doSubmit();
+    }
+  });
+  pass2Input.addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); doSubmit(); } });
+  setMode('login');
+}
+
 async function boot() {
-  saveData = loadSave();
+  accounts = loadAccountsDB();
+  const savedUser = localStorage.getItem('vocabRogueCurrentUser');
+  if (savedUser && accounts[savedUser]) {
+    currentUser = savedUser;
+    saveData = accounts[savedUser].saveData || defaultSaveData();
+    await startGameBoot();
+  } else {
+    const loginEl = document.getElementById('login');
+    if (loginEl) loginEl.style.display = 'flex';
+    setupLoginUI();
+  }
+}
+
+async function startGameBoot() {
   try {
     const resp = await fetch('wordbank.json');
     if (resp.ok) {
