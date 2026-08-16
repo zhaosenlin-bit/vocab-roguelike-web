@@ -2217,6 +2217,7 @@ function drawPlayer() {
     drawAtlasCentered(ctx, gun, 8, 4, playerFacing * 8 + frame, player.pos.x, player.pos.y - 14, 90, 90);
     drawPlayerShield();
     drawPlayerWeapon(aim);
+    drawPets();
     return;
   }
   if (walk && walk.naturalWidth) {
@@ -2224,18 +2225,21 @@ function drawPlayer() {
     drawAtlasCentered(ctx, walk, 6, 4, playerFacing * 6 + frame, player.pos.x, player.pos.y - 16, 88, 88);
     drawPlayerShield();
     drawPlayerWeapon(aim);
+    drawPets();
     return;
   }
   if (dirs && dirs.naturalWidth) {
     drawAtlasCentered(ctx, dirs, 4, 1, playerFacing, player.pos.x, player.pos.y - 14, 84, 84);
     drawPlayerShield();
     drawPlayerWeapon(aim);
+    drawPets();
     return;
   }
   if (chars && chars.naturalWidth) {
     drawAtlasCentered(ctx, chars, 4, 2, 0, player.pos.x, player.pos.y - 14, 84, 84);
     drawPlayerShield();
     drawPlayerWeapon(aim);
+    drawPets();
     return;
   }
 
@@ -2254,6 +2258,88 @@ function drawPlayer() {
   ctx.lineTo(player.pos.x + aim.x * 45, player.pos.y + aim.y * 45);
   ctx.stroke();
   drawPlayerShield();
+  drawPets();
+}
+
+function drawPets() {
+  if (!saveData || !saveData.ownedPets || saveData.ownedPets.length === 0) return;
+  if (state !== STATE.PLAYING && state !== STATE.ROOMCLEAR && state !== STATE.PAUSED && state !== STATE.REWARD) return;
+  const count = saveData.ownedPets.length;
+  for (let i = 0; i < count; i++) {
+    const angle = roomTime * 2.2 + i * (Math.PI * 2 / count);
+    const bob = Math.sin(roomTime * 4 + i * 1.7) * 5;
+    const x = player.pos.x + Math.cos(angle) * 42;
+    const y = player.pos.y + Math.sin(angle) * 42 * 0.62 - 14 + bob;
+    drawPetCreature(saveData.ownedPets[i], x, y);
+  }
+}
+
+function drawPetCreature(id, x, y) {
+  ctx.save();
+  if (id === 'bat') {
+    ctx.fillStyle = 'rgba(86,66,122,0.95)';
+    ctx.beginPath(); ctx.ellipse(x - 20, y - 8, 7.5, 5.5, 0, 0, Math.PI * 2); ctx.fill();
+    ctx.beginPath(); ctx.ellipse(x + 5, y - 8, 7.5, 5.5, 0, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = 'rgba(118,96,158,0.98)';
+    ctx.beginPath(); ctx.ellipse(x - 8, y - 8, 8, 7.5, 0, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = '#fff';
+    ctx.beginPath(); ctx.ellipse(x - 5, y - 4, 2, 2.5, 0, 0, Math.PI * 2); ctx.fill();
+    ctx.beginPath(); ctx.ellipse(x + 1, y - 4, 2, 2.5, 0, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = 'rgba(40,30,60,0.95)';
+    ctx.beginPath(); ctx.arc(x - 4, y - 3, 1, 0, Math.PI * 2); ctx.fill();
+    ctx.beginPath(); ctx.arc(x + 2, y - 3, 1, 0, Math.PI * 2); ctx.fill();
+  } else if (id === 'fairy') {
+    ctx.fillStyle = 'rgba(255,220,170,0.28)';
+    ctx.beginPath(); ctx.ellipse(x - 15, y - 15, 15, 15, 0, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = 'rgba(255,236,200,0.75)';
+    ctx.beginPath(); ctx.ellipse(x - 18, y - 9, 5.5, 7.5, -0.4, 0, Math.PI * 2); ctx.fill();
+    ctx.beginPath(); ctx.ellipse(x + 7, y - 9, 5.5, 7.5, 0.4, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = 'rgba(255,190,130,0.98)';
+    ctx.beginPath(); ctx.ellipse(x - 7, y - 7, 7, 7, 0, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = 'rgba(90,50,30,0.95)';
+    ctx.beginPath(); ctx.arc(x - 4, y - 2, 1.5, 0, Math.PI * 2); ctx.fill();
+    ctx.beginPath(); ctx.arc(x + 1, y - 2, 1.5, 0, Math.PI * 2); ctx.fill();
+  } else if (id === 'hedgehog') {
+    ctx.fillStyle = 'rgba(140,108,74,0.95)';
+    for (let i = 0; i < 8; i++) {
+      const a = i * Math.PI / 4;
+      ctx.beginPath(); ctx.arc(x + Math.cos(a) * 11, y - 3 + Math.sin(a) * 8, 2.5, 0, Math.PI * 2); ctx.fill();
+    }
+    ctx.fillStyle = 'rgba(196,150,102,0.98)';
+    ctx.beginPath(); ctx.ellipse(x - 8, y - 5, 8, 6, 0, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = 'rgba(70,46,26,0.95)';
+    ctx.beginPath(); ctx.ellipse(x + 5, y + 1, 2, 1.5, 0, 0, Math.PI * 2); ctx.fill();
+    ctx.beginPath(); ctx.arc(x - 3, y - 1, 1.3, 0, Math.PI * 2); ctx.fill();
+  } else if (id === 'owl') {
+    ctx.fillStyle = 'rgba(94,116,148,0.95)';
+    ctx.beginPath(); ctx.ellipse(x - 8, y - 14, 3, 4, 0, 0, Math.PI * 2); ctx.fill();
+    ctx.beginPath(); ctx.ellipse(x + 2, y - 14, 3, 4, 0, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = 'rgba(126,148,178,0.98)';
+    ctx.beginPath(); ctx.ellipse(x - 9, y - 8, 9, 8.5, 0, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = '#fff';
+    ctx.beginPath(); ctx.ellipse(x - 6, y - 4, 2.5, 3, 0, 0, Math.PI * 2); ctx.fill();
+    ctx.beginPath(); ctx.ellipse(x + 1, y - 4, 2.5, 3, 0, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = 'rgba(30,40,60,0.95)';
+    ctx.beginPath(); ctx.arc(x - 5, y - 3, 1.5, 0, Math.PI * 2); ctx.fill();
+    ctx.beginPath(); ctx.arc(x + 2, y - 3, 1.5, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = 'rgba(240,196,92,0.98)';
+    ctx.beginPath();
+    ctx.moveTo(x - 2, y + 3); ctx.lineTo(x + 2, y + 3); ctx.lineTo(x, y + 6);
+    ctx.closePath(); ctx.fill();
+  } else if (id === 'dragon') {
+    ctx.fillStyle = 'rgba(150,96,30,0.95)';
+    ctx.beginPath(); ctx.ellipse(x - 7, y - 12, 2, 3.5, 0, 0, Math.PI * 2); ctx.fill();
+    ctx.beginPath(); ctx.ellipse(x + 3, y - 12, 2, 3.5, 0, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = 'rgba(224,166,60,0.95)';
+    ctx.beginPath(); ctx.ellipse(x - 18, y - 6, 6.5, 5, 0, 0, Math.PI * 2); ctx.fill();
+    ctx.beginPath(); ctx.ellipse(x + 5, y - 6, 6.5, 5, 0, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = 'rgba(255,205,82,0.98)';
+    ctx.beginPath(); ctx.ellipse(x - 8, y - 7, 8, 7.5, 0, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = 'rgba(120,60,10,0.95)';
+    ctx.beginPath(); ctx.arc(x - 4, y - 3, 1.5, 0, Math.PI * 2); ctx.fill();
+    ctx.beginPath(); ctx.arc(x + 1, y - 3, 1.5, 0, Math.PI * 2); ctx.fill();
+  }
+  ctx.restore();
 }
 
 function drawPlayerWeapon(aim) {
@@ -2644,15 +2730,16 @@ function drawShopPetCard(i) {
   ctx.textBaseline = 'middle';
   ctx.font = 'bold 17px ' + FONT_UI;
   ctx.fillStyle = '#fff';
-  ctx.fillText(pet.name, r.left + 20, r.top + 16);
+  ctx.fillText(pet.name, r.left + 78, r.top + 16);
   ctx.font = '13px ' + FONT_UI;
   ctx.fillStyle = 'rgba(186,200,214,0.95)';
-  ctx.fillText(pet.desc, r.left + 20, r.top + 42);
+  ctx.fillText(pet.desc, r.left + 78, r.top + 42);
   ctx.textAlign = 'right';
   ctx.font = 'bold 15px ' + FONT_UI;
   if (owned) { ctx.fillStyle = '#8ce6a5'; ctx.fillText('已拥有', r.right - 20, r.top + 30); }
   else if (canBuy) { ctx.fillStyle = '#ffd65c'; ctx.fillText('购买 ' + pet.price + ' 金币', r.right - 20, r.top + 30); }
   else { ctx.fillStyle = 'rgba(180,190,200,0.9)'; ctx.fillText('金币不足 ' + pet.price, r.right - 20, r.top + 30); }
+  drawPetCreature(pet.id, r.left + 40, r.top + 31);
   ctx.restore();
 }
 
