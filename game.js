@@ -134,6 +134,7 @@ let showBook = false;
 let mouseLeftDown = false;
 let mouse = { x: W / 2, y: H / 2 };
 let lastMoveDir = new Vec2(0, 1);
+let showStartHealNotice = false;
 
 /* ---------- 工厂函数 ---------- */
 function makePlayer() {
@@ -141,7 +142,7 @@ function makePlayer() {
     pos: new Vec2(W / 2, H / 2 + 120), radius: 18, hp: 100, maxHp: 100,
     speed: 245, dashCooldown: 1.2, dashTimer: 0, throwSpeed: 610, pickupRange: 84,
     defense: 0, memoryBonus: 0, luck: 0, invulnerable: 0, speedBoost: 0, shieldTime: 0,
-    piercingInk: false, echoScroll: false, heldMeaning: ''
+    piercingInk: false, echoScroll: false, heldMeaning: '', healingSyringes: 0
   };
 }
 
@@ -249,6 +250,10 @@ function startGame(maxDifficulty, modeName, enterFirstRoom = true) {
   if (bankWords.length === 0) bankWords = allWords.slice();
 
   player = makePlayer();
+  if (enterFirstRoom && Math.random() < 0.70) {
+    player.healingSyringes = 5;
+    showStartHealNotice = true;
+  }
   monsters = []; meanings = []; projectiles = []; enemyProjectiles = [];
   drops = []; chests = []; floatingTexts = []; obstacles = [];
   runWords = []; roomLog = [];
@@ -289,6 +294,7 @@ function continueGame() {
   tempThrowBonus = Math.max(0, saveData.continueTempThrowBonus);
   tempDashBonus = Math.max(0, saveData.continueTempDashBonus);
   tempPickupBonus = Math.max(0, saveData.continueTempPickupBonus);
+  player.healingSyringes = saveData.continueHealingSyringes || 0;
   player.piercingInk = piercingInkRooms > 0;
   player.echoScroll = echoScrollRooms > 0;
   startRoom(false);
@@ -298,6 +304,10 @@ function continueGame() {
 function startRoom(advancePowerups) {
   state = STATE.PLAYING;
   room++;
+  if (showStartHealNotice) {
+    addFloat('获得 5 支治疗针剂（H）', player.pos.add(new Vec2(0, -42)), [150, 255, 180]);
+    showStartHealNotice = false;
+  }
   if (advancePowerups) advanceRoomLimitedPowerups();
   monsters = []; meanings = []; projectiles = []; enemyProjectiles = [];
   drops = []; chests = []; floatingTexts = []; obstacles = []; roomLog = [];
@@ -1272,6 +1282,17 @@ function usePotion() {
   }
 }
 
+function tryUseHeal() {
+  if ((state !== STATE.PLAYING && state !== STATE.ROOMCLEAR) || player.healingSyringes <= 0) return;
+  player.healingSyringes -= 1;
+  const heal = player.maxHp * 0.30;
+  player.hp = Math.min(player.maxHp, player.hp + heal);
+  player.invulnerable = Math.max(player.invulnerable, 0.25);
+  addFloat('治疗 +' + Math.floor(heal), player.pos.add(new Vec2(0, -34)), [150, 255, 180]);
+  playSound('ui_click');
+  saveContinueState();
+}
+
 function fireHeldMeaning(echo) {
   if (!player.heldMeaning) return;
   const dir = getAimDirection();
@@ -1520,6 +1541,7 @@ function saveContinueState() {
   saveData.continueTempThrowBonus = tempThrowBonus;
   saveData.continueTempDashBonus = tempDashBonus;
   saveData.continueTempPickupBonus = tempPickupBonus;
+  saveData.continueHealingSyringes = player.healingSyringes;
   saveData.words = collectWordStats();
   persistSave();
 }
@@ -1728,7 +1750,7 @@ function drawMenu() {
   ctx.font = '14px ' + FONT_UI;
   ctx.textAlign = 'center';
   ctx.fillStyle = 'rgba(160,175,195,0.65)';
-  ctx.fillText('WASD/方向键移动 · 鼠标瞄准 · 左键发射中文词块 · E 拾取 · Space 闪避 · Q 护盾 · Tab 记忆书 · F11 全屏', W / 2, 672);
+  ctx.fillText('WASD/方向键移动 · 鼠标瞄准 · 左键发射中文词块 · E 拾取 · Space 闪避 · Q 护盾 · H 治疗针剂 · Tab 记忆书 · F11 全屏', W / 2, 672);
   ctx.restore();
 }
 
@@ -2214,6 +2236,11 @@ function drawHud(t) {
   ctx.textAlign = 'left';
   ctx.textBaseline = 'middle';
   ctx.fillText('HP ' + Math.max(0, Math.ceil(player.hp)) + '/' + Math.round(player.maxHp), 22, 23);
+  ctx.font = '12px ' + FONT_UI;
+  ctx.fillStyle = player.healingSyringes > 0 ? 'rgba(150,255,200,0.95)' : 'rgba(140,160,180,0.5)';
+  ctx.textAlign = 'right';
+  ctx.fillText('治疗针剂 x' + Math.floor(player.healingSyringes) + ' (H)', W - 250, 22);
+  ctx.textAlign = 'left';
 
   ctx.fillStyle = 'rgba(220,235,250,0.9)';
   ctx.fillText('第 ' + room + ' 间 · ' + THEMES[(room - 1 + THEMES.length) % THEMES.length].name, 280, 20);
@@ -2558,6 +2585,7 @@ document.addEventListener('keydown', (e) => {
     if (e.code === 'Space') { e.preventDefault(); tryDash(); }
     if (e.code === 'KeyE') { e.preventDefault(); tryInteract(); }
     if (e.code === 'KeyQ') { e.preventDefault(); usePotion(); }
+    if (e.code === 'KeyH') { e.preventDefault(); tryUseHeal(); }
   }
 });
 
@@ -2648,3 +2676,17 @@ async function boot() {
 }
 
 boot();
+
+/* ---------- ????????????? ---------- */
+window.__game = {
+  get state() { return state; },
+  get monsters() { return monsters; },
+  get player() { return player; },
+  get room() { return room; },
+  startGame: (maxDiff, name, enter) => startGame(maxDiff, name, enter),
+  triggerRage: (m, power, duration) => triggerRage(m, power, duration),
+  resolveHit: (p, m) => resolveHit(p, m),
+  fireHeldMeaning: (echo) => fireHeldMeaning(echo),
+  getAimDirection: () => getAimDirection(),
+  tick: (dt) => tick(dt)
+};
