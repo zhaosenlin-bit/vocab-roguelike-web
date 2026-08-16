@@ -184,6 +184,8 @@ let meanings = [];
 let projectiles = [];
 let enemyProjectiles = [];
 let drops = [];
+let endScreenRestartRect = null;
+let endScreenMenuRect = null;
 let rewardCards = [];
 let floatingTexts = [];
 let chests = [];
@@ -1607,9 +1609,10 @@ function onRoomCleared() {
   }
 
   const distinct = new Set(runWords.map(w => w.word)).size;
-  if (distinct >= bankWords.length) {
+  // 双保险：bankWords 太少（fallback 词库或极小难度）时不视作通关，避免第一间就结束游戏
+  if (bankWords.length >= 10 && distinct >= bankWords.length) {
     state = STATE.WIN;
-    message = '词库清空，通关！按 Enter 回到主菜单。';
+    message = '词库清空，通关！';
     saveData.bestRoom = Math.max(saveData.bestRoom, room);
     saveData.hasContinue = false;
     saveGame();
@@ -2725,7 +2728,29 @@ function drawEndScreen(title) {
     ctx.fillText(w.meaning + '  (对 ' + (w.correctCount || 0) + ' / 错 ' + (w.wrongCount || 0) + ')', x + 170, yy);
   }
   ctx.restore();
-  drawCentered('按 Enter 回到主菜单', '16px ' + FONT_UI, [160, 180, 205], 585);
+  // Two buttons: restart and back to menu
+  const restartRect = { left: W / 2 - 220, top: 600, right: W / 2 - 20, bottom: 645 };
+  const menuRect = { left: W / 2 + 20, top: 600, right: W / 2 + 220, bottom: 645 };
+  endScreenRestartRect = restartRect;
+  endScreenMenuRect = menuRect;
+  const hoverRestart = pointInMenuRect(mouse, restartRect);
+  const hoverMenu = pointInMenuRect(mouse, menuRect);
+  const fillRestart = hoverRestart ? 'rgba(96,180,140,0.95)' : 'rgba(58,108,82,0.95)';
+  const fillMenu = hoverMenu ? 'rgba(120,56,64,0.95)' : 'rgba(80,38,46,0.95)';
+  ctx.fillStyle = fillRestart;
+  ctx.strokeStyle = 'rgba(180,235,200,0.9)'; ctx.lineWidth = 2;
+  roundRectPath(restartRect.left, restartRect.top, restartRect.right - restartRect.left, restartRect.bottom - restartRect.top, 8); ctx.fill(); ctx.stroke();
+  ctx.fillStyle = fillMenu;
+  ctx.strokeStyle = 'rgba(220,140,150,0.9)';
+  roundRectPath(menuRect.left, menuRect.top, menuRect.right - menuRect.left, menuRect.bottom - menuRect.top, 8); ctx.fill(); ctx.stroke();
+  ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+  ctx.font = 'bold 18px ' + FONT_UI;
+  ctx.fillStyle = '#ffffff';
+  ctx.fillText('再来一局', (restartRect.left + restartRect.right) / 2, (restartRect.top + restartRect.bottom) / 2);
+  ctx.fillText('回主菜单', (menuRect.left + menuRect.right) / 2, (menuRect.top + menuRect.bottom) / 2);
+  ctx.font = '12px ' + FONT_UI;
+  ctx.fillStyle = 'rgba(190,205,225,0.8)';
+  ctx.fillText('提示：按 R 再来一局 / M 回主菜单', W / 2, 670);
 }
 /* ============================================================
  * 第五部分：输入、菜单点击、主循环、启动
@@ -2745,6 +2770,19 @@ function clientToGame(clientX, clientY) {
 
 function pointInMenuRect(p, r) {
   return p.x >= r.left && p.x <= r.right && p.y >= r.top && p.y <= r.bottom;
+}
+
+function handleEndScreenClick(p) {
+  if (endScreenRestartRect && pointInMenuRect(p, endScreenRestartRect)) {
+    playSound('ui_click');
+    startSelectedGame();
+    return;
+  }
+  if (endScreenMenuRect && pointInMenuRect(p, endScreenMenuRect)) {
+    playSound('ui_click');
+    state = STATE.MENU;
+    return;
+  }
 }
 
 function handleMenuClick(p) {
@@ -2925,7 +2963,8 @@ document.addEventListener('keydown', (e) => {
   }
 
   if (state === STATE.GAMEOVER || state === STATE.WIN) {
-    if (e.code === 'Enter') state = STATE.MENU;
+    if (e.code === 'Enter' || e.code === 'KeyR') { startSelectedGame(); return; }
+    if (e.code === 'KeyM' || e.code === 'Escape') { state = STATE.MENU; return; }
     return;
   }
 
@@ -2959,6 +2998,7 @@ canvas.addEventListener('mousedown', (e) => {
   const p = clientToGame(e.clientX, e.clientY);
   if (state === STATE.MENU) { handleMenuClick(p); return; }
   if (state === STATE.REWARD) { handleRewardClick(p); return; }
+  if (state === STATE.GAMEOVER || state === STATE.WIN) { handleEndScreenClick(p); return; }
   mouse = p;
   mouseLeftDown = true;
   if (state === STATE.PLAYING) fireHeldMeaning(false);
@@ -3076,13 +3116,94 @@ async function startGameBoot() {
   } catch (e) { /* fallback below */ }
 
   if (!Array.isArray(allWords) || allWords.length === 0) {
+    // 加载失败时启用内置词库：保证即便 file:// 协议 fetch 被拦截也能正常游戏，避免词库只有几个词时第一间就通关
+    console.warn('[词域探险] wordbank.json 加载失败，使用内置 fallback 词库。请通过 HTTP 服务器（如 http://localhost:8000）访问以获得完整词库。');
     allWords = [
-      { word: 'increase', meaning: '增加', difficulty: 2, frequencyRank: 1200, tags: ['highschool', 'verb'] },
-      { word: 'environment', meaning: '环境', difficulty: 2, frequencyRank: 800, tags: ['highschool', 'noun'] },
-      { word: 'achieve', meaning: '实现', difficulty: 3, frequencyRank: 900, tags: ['cet', 'verb'] },
-      { word: 'significant', meaning: '重要的', difficulty: 3, frequencyRank: 700, tags: ['cet', 'adj'] },
-      { word: 'sophisticated', meaning: '复杂的', difficulty: 5, frequencyRank: 600, tags: ['ielts', 'adj'] },
-      { word: 'meticulous', meaning: '一丝不苟的', difficulty: 6, frequencyRank: 500, tags: ['ielts', 'adj'] }
+      { word: 'increase', meaning: '增加', difficulty: 2, frequencyRank: 500, tags: ['highschool','verb'] },
+      { word: 'decrease', meaning: '减少', difficulty: 2, frequencyRank: 510, tags: ['highschool','verb'] },
+      { word: 'include', meaning: '包含', difficulty: 2, frequencyRank: 520, tags: ['highschool','verb'] },
+      { word: 'improve', meaning: '改善', difficulty: 2, frequencyRank: 530, tags: ['highschool','verb'] },
+      { word: 'affect', meaning: '影响', difficulty: 3, frequencyRank: 540, tags: ['cet','verb'] },
+      { word: 'market', meaning: '市场', difficulty: 2, frequencyRank: 550, tags: ['highschool','verb'] },
+      { word: 'research', meaning: '研究', difficulty: 3, frequencyRank: 560, tags: ['cet','verb'] },
+      { word: 'transport', meaning: '运输', difficulty: 3, frequencyRank: 570, tags: ['cet','verb'] },
+      { word: 'culture', meaning: '文化', difficulty: 2, frequencyRank: 580, tags: ['highschool','verb'] },
+      { word: 'policy', meaning: '政策', difficulty: 3, frequencyRank: 590, tags: ['cet','verb'] },
+      { word: 'analyze', meaning: '分析', difficulty: 3, frequencyRank: 600, tags: ['cet','verb'] },
+      { word: 'compare', meaning: '比较', difficulty: 2, frequencyRank: 610, tags: ['highschool','verb'] },
+      { word: 'consider', meaning: '考虑', difficulty: 3, frequencyRank: 620, tags: ['cet','verb'] },
+      { word: 'develop', meaning: '发展', difficulty: 2, frequencyRank: 630, tags: ['highschool','verb'] },
+      { word: 'produce', meaning: '生产', difficulty: 2, frequencyRank: 640, tags: ['highschool','verb'] },
+      { word: 'achieve', meaning: '实现', difficulty: 3, frequencyRank: 650, tags: ['cet','verb'] },
+      { word: 'establish', meaning: '建立', difficulty: 3, frequencyRank: 660, tags: ['cet','verb'] },
+      { word: 'require', meaning: '需要', difficulty: 3, frequencyRank: 670, tags: ['cet','verb'] },
+      { word: 'provide', meaning: '提供', difficulty: 2, frequencyRank: 680, tags: ['highschool','verb'] },
+      { word: 'reduce', meaning: '降低', difficulty: 2, frequencyRank: 690, tags: ['highschool','verb'] },
+      { word: 'maintain', meaning: '维护', difficulty: 3, frequencyRank: 700, tags: ['cet','verb'] },
+      { word: 'measure', meaning: '衡量', difficulty: 3, frequencyRank: 710, tags: ['cet','verb'] },
+      { word: 'expect', meaning: '期望', difficulty: 3, frequencyRank: 720, tags: ['cet','verb'] },
+      { word: 'support', meaning: '支持', difficulty: 2, frequencyRank: 730, tags: ['highschool','verb'] },
+      { word: 'suggest', meaning: '建议', difficulty: 3, frequencyRank: 740, tags: ['cet','verb'] },
+      { word: 'apply', meaning: '申请', difficulty: 2, frequencyRank: 750, tags: ['highschool','verb'] },
+      { word: 'attempt', meaning: '尝试', difficulty: 3, frequencyRank: 760, tags: ['cet','verb'] },
+      { word: 'benefit', meaning: '利益', difficulty: 3, frequencyRank: 770, tags: ['cet','verb'] },
+      { word: 'challenge', meaning: '挑战', difficulty: 4, frequencyRank: 780, tags: ['cet','verb'] },
+      { word: 'complex', meaning: '复杂的', difficulty: 4, frequencyRank: 790, tags: ['cet','verb'] },
+      { word: 'conclude', meaning: '总结', difficulty: 4, frequencyRank: 800, tags: ['cet','verb'] },
+      { word: 'constant', meaning: '持续的', difficulty: 4, frequencyRank: 810, tags: ['cet','verb'] },
+      { word: 'construct', meaning: '建造', difficulty: 4, frequencyRank: 820, tags: ['cet','verb'] },
+      { word: 'contribute', meaning: '贡献', difficulty: 4, frequencyRank: 830, tags: ['cet','verb'] },
+      { word: 'create', meaning: '创造', difficulty: 3, frequencyRank: 840, tags: ['cet','verb'] },
+      { word: 'define', meaning: '定义', difficulty: 3, frequencyRank: 850, tags: ['cet','verb'] },
+      { word: 'demand', meaning: '需求', difficulty: 3, frequencyRank: 860, tags: ['cet','verb'] },
+      { word: 'depend', meaning: '依赖', difficulty: 3, frequencyRank: 870, tags: ['cet','verb'] },
+      { word: 'describe', meaning: '描述', difficulty: 3, frequencyRank: 880, tags: ['cet','verb'] },
+      { word: 'design', meaning: '设计', difficulty: 3, frequencyRank: 890, tags: ['cet','verb'] },
+      { word: 'determine', meaning: '决定', difficulty: 4, frequencyRank: 900, tags: ['cet','verb'] },
+      { word: 'differ', meaning: '不同', difficulty: 3, frequencyRank: 910, tags: ['cet','verb'] },
+      { word: 'economy', meaning: '经济', difficulty: 3, frequencyRank: 920, tags: ['cet','verb'] },
+      { word: 'efficient', meaning: '高效的', difficulty: 4, frequencyRank: 930, tags: ['cet','verb'] },
+      { word: 'emerge', meaning: '出现', difficulty: 4, frequencyRank: 940, tags: ['cet','verb'] },
+      { word: 'enhance', meaning: '增强', difficulty: 4, frequencyRank: 950, tags: ['cet','verb'] },
+      { word: 'ensure', meaning: '确保', difficulty: 4, frequencyRank: 960, tags: ['cet','verb'] },
+      { word: 'estimate', meaning: '估计', difficulty: 4, frequencyRank: 970, tags: ['cet','verb'] },
+      { word: 'evaluate', meaning: '评估', difficulty: 4, frequencyRank: 980, tags: ['cet','verb'] },
+      { word: 'evidence', meaning: '证据', difficulty: 4, frequencyRank: 990, tags: ['cet','verb'] },
+      { word: 'examine', meaning: '检查', difficulty: 4, frequencyRank: 1000, tags: ['cet','verb'] },
+      { word: 'expand', meaning: '扩展', difficulty: 3, frequencyRank: 1010, tags: ['cet','verb'] },
+      { word: 'expose', meaning: '暴露', difficulty: 4, frequencyRank: 1020, tags: ['cet','verb'] },
+      { word: 'factor', meaning: '因素', difficulty: 3, frequencyRank: 1030, tags: ['cet','verb'] },
+      { word: 'focus', meaning: '聚焦', difficulty: 3, frequencyRank: 1040, tags: ['cet','verb'] },
+      { word: 'frequent', meaning: '频繁的', difficulty: 4, frequencyRank: 1050, tags: ['cet','verb'] },
+      { word: 'function', meaning: '功能', difficulty: 3, frequencyRank: 1060, tags: ['cet','verb'] },
+      { word: 'global', meaning: '全球的', difficulty: 4, frequencyRank: 1070, tags: ['cet','verb'] },
+      { word: 'identify', meaning: '识别', difficulty: 4, frequencyRank: 1080, tags: ['cet','verb'] },
+      { word: 'impact', meaning: '影响', difficulty: 3, frequencyRank: 1090, tags: ['cet','verb'] },
+      { word: 'imply', meaning: '暗示', difficulty: 4, frequencyRank: 1100, tags: ['cet','verb'] },
+      { word: 'income', meaning: '收入', difficulty: 3, frequencyRank: 1110, tags: ['cet','verb'] },
+      { word: 'indicate', meaning: '表明', difficulty: 4, frequencyRank: 1120, tags: ['cet','verb'] },
+      { word: 'individual', meaning: '个人', difficulty: 4, frequencyRank: 1130, tags: ['cet','verb'] },
+      { word: 'industry', meaning: '行业', difficulty: 3, frequencyRank: 1140, tags: ['cet','verb'] },
+      { word: 'influence', meaning: '影响', difficulty: 4, frequencyRank: 1150, tags: ['cet','verb'] },
+      { word: 'interpret', meaning: '解释', difficulty: 4, frequencyRank: 1160, tags: ['cet','verb'] },
+      { word: 'introduce', meaning: '介绍', difficulty: 3, frequencyRank: 1170, tags: ['cet','verb'] },
+      { word: 'invest', meaning: '投资', difficulty: 4, frequencyRank: 1180, tags: ['cet','verb'] },
+      { word: 'involve', meaning: '涉及', difficulty: 4, frequencyRank: 1190, tags: ['cet','verb'] },
+      { word: 'significant', meaning: '重要的', difficulty: 3, frequencyRank: 1200, tags: ['cet','verb'] },
+      { word: 'sophisticated', meaning: '复杂的', difficulty: 5, frequencyRank: 1210, tags: ['ielts','verb'] },
+      { word: 'meticulous', meaning: '一丝不苟的', difficulty: 6, frequencyRank: 1220, tags: ['ielts','verb'] },
+      { word: 'comprehensive', meaning: '全面的', difficulty: 5, frequencyRank: 1230, tags: ['ielts','verb'] },
+      { word: 'controversial', meaning: '有争议的', difficulty: 5, frequencyRank: 1240, tags: ['ielts','verb'] },
+      { word: 'genuine', meaning: '真正的', difficulty: 4, frequencyRank: 1250, tags: ['cet','verb'] },
+      { word: 'immediate', meaning: '立刻的', difficulty: 4, frequencyRank: 1260, tags: ['cet','verb'] },
+      { word: 'logic', meaning: '逻辑', difficulty: 3, frequencyRank: 1270, tags: ['cet','verb'] },
+      { word: 'method', meaning: '方法', difficulty: 3, frequencyRank: 1280, tags: ['cet','verb'] },
+      { word: 'obvious', meaning: '明显的', difficulty: 4, frequencyRank: 1290, tags: ['cet','verb'] },
+      { word: 'participate', meaning: '参加', difficulty: 4, frequencyRank: 1300, tags: ['cet','verb'] },
+      { word: 'quality', meaning: '质量', difficulty: 3, frequencyRank: 1310, tags: ['cet','verb'] },
+      { word: 'reasonable', meaning: '合理的', difficulty: 4, frequencyRank: 1320, tags: ['cet','verb'] },
+      { word: 'reliable', meaning: '可靠的', difficulty: 4, frequencyRank: 1330, tags: ['cet','verb'] },
+      { word: 'represent', meaning: '代表', difficulty: 4, frequencyRank: 1340, tags: ['cet','verb'] }
     ];
   }
   mergeSavedStats();
