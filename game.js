@@ -221,7 +221,7 @@ let currentUser = null;
 function makePlayer() {
   return {
     pos: new Vec2(W / 2, H / 2 + 120), radius: 18, hp: 100, maxHp: 100,
-    speed: 245, dashCooldown: 1.2, dashTimer: 0, throwSpeed: 610, pickupRange: 84,
+    speed: 245, dashCooldown: 1.2, dashTimer: 0, throwSpeed: 610, pickupRange: 140,
     defense: 0, memoryBonus: 0, luck: 0, invulnerable: 0, speedBoost: 0, shieldTime: 0,
     piercingInk: false, echoScroll: false, heldMeaning: '', healingSyringes: 0,
     throwDamageBonus: 0, flatDamageReduction: 0
@@ -2512,6 +2512,22 @@ function drawHud(t) {
   ctx.fillText('E 拾取 · 左键发射', W - 18, 40);
   ctx.fillStyle = '#ffd65c';
   ctx.fillText('金币 ' + (saveData ? saveData.coins : 0), W - 18, 56);
+
+  // 空仓提示：玩家没拾取任何 meaning 时闪一个明显提示，提醒按 E 拾取后再开火
+  if (state === STATE.PLAYING && !player.heldMeaning && meanings.length > 0) {
+    const blink = Math.floor(performance.now() / 380) % 2 === 0;
+    ctx.save();
+    ctx.textAlign = 'center';
+    ctx.font = 'bold 22px ' + FONT_UI;
+    ctx.shadowColor = 'rgba(0,0,0,0.95)';
+    ctx.shadowBlur = 8;
+    ctx.fillStyle = blink ? 'rgba(255,236,142,0.98)' : 'rgba(255,170,90,0.98)';
+    ctx.fillText('⚠ 按 E 拾取最近的词块，再按左键发射', W / 2, 110);
+    ctx.font = '12px ' + FONT_UI;
+    ctx.fillStyle = 'rgba(210,220,235,0.85)';
+    ctx.fillText('子弹必须基于已拾取的含义（中文标签）才能命中怪物', W / 2, 132);
+    ctx.restore();
+  }
 
   if (message) {
     ctx.save();
