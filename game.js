@@ -185,6 +185,8 @@ let projectiles = [];
 let enemyProjectiles = [];
 let drops = [];
 let endScreenRestartRect = null;
+let quitConfirmOpen = false;
+let quitDone = false;
 let endScreenMenuRect = null;
 let rewardCards = [];
 let floatingTexts = [];
@@ -1757,6 +1759,8 @@ function render() {
 
   if (state === STATE.MENU) {
     drawMenu();
+    if (quitDone) drawQuitScreen();
+    else if (quitConfirmOpen) drawQuitConfirm();
   } else {
     drawGame();
     if (state === STATE.REWARD) drawRewardChoice();
@@ -1794,6 +1798,10 @@ function menuShopRect() {
 
 function menuLogoutRect() {
   return { left: 850, top: 198, right: 1100, bottom: 230 };
+}
+
+function menuQuitRect() {
+  return { left: 1030, top: 500, right: 1240, bottom: 556 };
 }
 
 const SHOP_PETS = [
@@ -1907,6 +1915,22 @@ function drawMenu() {
   ctx.textBaseline = 'middle';
   ctx.fillStyle = '#f0e2ff';
   ctx.fillText('宠物商城（金币 ' + (saveData ? saveData.coins : 0) + '）', (shop.left + shop.right) / 2, (shop.top + shop.bottom) / 2);
+  ctx.restore();
+
+  const quit = menuQuitRect();
+  const quitHover = pointInMenuRect(mouse, quit);
+  ctx.save();
+  ctx.fillStyle = quitHover ? 'rgba(200,64,58,0.95)' : 'rgba(148,42,38,0.9)';
+  roundRectPath(quit.left, quit.top, quit.right - quit.left, quit.bottom - quit.top, 10);
+  ctx.fill();
+  ctx.strokeStyle = 'rgba(255,150,140,0.9)';
+  ctx.lineWidth = 2;
+  ctx.stroke();
+  ctx.font = 'bold 18px ' + FONT_UI;
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.fillStyle = '#ffe3e0';
+  ctx.fillText('退出游戏 ⏻', (quit.left + quit.right) / 2, (quit.top + quit.bottom) / 2);
   ctx.restore();
 
   ctx.save();
@@ -2802,6 +2826,15 @@ function handleEndScreenClick(p) {
 }
 
 function handleMenuClick(p) {
+  if (quitDone) {
+    if (pointInMenuRect(p, quitReenterRect())) quitDone = false;
+    return;
+  }
+  if (quitConfirmOpen) {
+    if (pointInMenuRect(p, quitYesRect())) confirmQuit();
+    else if (pointInMenuRect(p, quitNoRect())) quitConfirmOpen = false;
+    return;
+  }
   if (shopOpen) {
     handleShopClick(p);
     return;
@@ -2832,6 +2865,99 @@ function handleMenuClick(p) {
     playSound('ui_click');
     logout();
   }
+  if (pointInMenuRect(p, menuQuitRect())) {
+    playSound('ui_click');
+    quitConfirmOpen = true;
+  }
+}
+
+function quitYesRect() {
+  return { left: W / 2 - 190, top: 330, right: W / 2 - 10, bottom: 386 };
+}
+
+function quitNoRect() {
+  return { left: W / 2 + 10, top: 330, right: W / 2 + 190, bottom: 386 };
+}
+
+function quitReenterRect() {
+  return { left: W / 2 - 130, top: 400, right: W / 2 + 130, bottom: 458 };
+}
+
+function confirmQuit() {
+  quitConfirmOpen = false;
+  try { persistSave(); } catch (e) { /* ignore */ }
+  quitDone = true;
+}
+
+function drawQuitConfirm() {
+  ctx.save();
+  ctx.fillStyle = 'rgba(6,8,12,0.72)';
+  ctx.fillRect(0, 0, W, H);
+  ctx.fillStyle = 'rgba(24,30,42,0.98)';
+  roundRectPath(W / 2 - 260, 210, 520, 230, 14);
+  ctx.fill();
+  ctx.strokeStyle = 'rgba(220,140,150,0.8)';
+  ctx.lineWidth = 2;
+  ctx.stroke();
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.font = 'bold 26px ' + FONT_UI;
+  ctx.fillStyle = '#ffdce0';
+  ctx.fillText('确定退出游戏吗？', W / 2, 262);
+  ctx.font = '14px ' + FONT_UI;
+  ctx.fillStyle = 'rgba(200,210,225,0.85)';
+  ctx.fillText('退出前会自动保存进度，之后需要重新进入游戏', W / 2, 296);
+
+  const yes = quitYesRect();
+  const no = quitNoRect();
+  const yesHover = pointInMenuRect(mouse, yes);
+  const noHover = pointInMenuRect(mouse, no);
+  ctx.fillStyle = yesHover ? 'rgba(210,80,70,0.98)' : 'rgba(160,52,46,0.95)';
+  roundRectPath(yes.left, yes.top, yes.right - yes.left, yes.bottom - yes.top, 8);
+  ctx.fill();
+  ctx.strokeStyle = 'rgba(255,170,160,0.9)';
+  ctx.lineWidth = 2;
+  ctx.stroke();
+  ctx.font = 'bold 17px ' + FONT_UI;
+  ctx.fillStyle = '#fff';
+  ctx.fillText('退出游戏', (yes.left + yes.right) / 2, (yes.top + yes.bottom) / 2);
+
+  ctx.fillStyle = noHover ? 'rgba(90,104,126,0.98)' : 'rgba(60,72,92,0.95)';
+  roundRectPath(no.left, no.top, no.right - no.left, no.bottom - no.top, 8);
+  ctx.fill();
+  ctx.strokeStyle = 'rgba(170,185,205,0.8)';
+  ctx.lineWidth = 2;
+  ctx.stroke();
+  ctx.fillStyle = '#e8eef5';
+  ctx.fillText('取消', (no.left + no.right) / 2, (no.top + no.bottom) / 2);
+  ctx.restore();
+}
+
+function drawQuitScreen() {
+  ctx.save();
+  ctx.fillStyle = 'rgba(6,9,14,0.98)';
+  ctx.fillRect(0, 0, W, H);
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.font = 'bold 48px ' + FONT_UI;
+  ctx.fillStyle = '#ffe9a3';
+  ctx.fillText('游戏已退出', W / 2, 220);
+  ctx.font = '18px ' + FONT_UI;
+  ctx.fillStyle = 'rgba(200,210,225,0.9)';
+  ctx.fillText('进度已保存，感谢游玩词域探险！', W / 2, 280);
+
+  const re = quitReenterRect();
+  const reHover = pointInMenuRect(mouse, re);
+  ctx.fillStyle = reHover ? 'rgba(110,190,255,0.98)' : 'rgba(70,150,215,0.95)';
+  roundRectPath(re.left, re.top, re.right - re.left, re.bottom - re.top, 10);
+  ctx.fill();
+  ctx.strokeStyle = 'rgba(180,225,255,0.9)';
+  ctx.lineWidth = 2;
+  ctx.stroke();
+  ctx.font = 'bold 20px ' + FONT_UI;
+  ctx.fillStyle = '#fff';
+  ctx.fillText('重新进入游戏', (re.left + re.right) / 2, (re.top + re.bottom) / 2);
+  ctx.restore();
 }
 
 function shopPetRect(i) {
@@ -2959,6 +3085,15 @@ document.addEventListener('keydown', (e) => {
   keys.add(e.code);
 
   if (state === STATE.MENU) {
+    if (quitDone) {
+      if (e.code === 'Enter' || e.code === 'Escape') { e.preventDefault(); quitDone = false; }
+      return;
+    }
+    if (quitConfirmOpen) {
+      if (e.code === 'Escape') { e.preventDefault(); quitConfirmOpen = false; }
+      else if (e.code === 'Enter') { e.preventDefault(); confirmQuit(); }
+      return;
+    }
     if (e.code === 'Escape') { e.preventDefault(); shopOpen = false; return; }
     if (e.code === 'Enter') {
       e.preventDefault();
