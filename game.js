@@ -187,6 +187,7 @@ let drops = [];
 let endScreenRestartRect = null;
 let quitConfirmOpen = false;
 let quitDone = false;
+let menuLogoutUserCircle = null;
 let endScreenMenuRect = null;
 let rewardCards = [];
 let floatingTexts = [];
@@ -1703,6 +1704,131 @@ function roundRectPath(x, y, w, h, r) {
   ctx.closePath();
 }
 
+/* ---------- 手绘风格按钮（黑边 / 白底 / 黄字） ---------- */
+function drawSketchyRect(x, y, w, h, opts) {
+  opts = opts || {};
+  const fillColor   = opts.fill       || '#FFFFFF';
+  const borderColor = opts.borderColor|| '#000000';
+  const borderWidth = opts.borderWidth|| 4;
+  const jitter      = opts.jitter     || 2.2;
+  const seed        = (opts.seed || 0) + x * 0.0137 + y * 0.0271;
+  const radius      = (opts.radius != null) ? opts.radius : 0;
+
+  ctx.save();
+  if (radius > 0) {
+    roundRectPath(x, y, w, h, radius);
+    ctx.fillStyle = fillColor;
+    ctx.fill();
+  } else {
+    ctx.fillStyle = fillColor;
+    ctx.fillRect(x, y, w, h);
+  }
+
+  ctx.strokeStyle = borderColor;
+  ctx.lineWidth = borderWidth;
+  ctx.lineCap = 'round';
+  ctx.lineJoin = 'round';
+
+  const steps = Math.max(8, Math.floor(Math.max(w, h) / 18));
+
+  ctx.beginPath();
+  for (let i = 0; i <= steps; i++) {
+    const t = i / steps;
+    const px = x + t * w;
+    const py = y + Math.sin(seed + i * 0.83) * jitter;
+    if (i === 0) ctx.moveTo(px, py); else ctx.lineTo(px, py);
+  }
+  ctx.stroke();
+
+  ctx.beginPath();
+  for (let i = 0; i <= steps; i++) {
+    const t = i / steps;
+    const px = x + w + Math.sin(seed * 1.3 + i * 0.91) * jitter;
+    const py = y + t * h;
+    if (i === 0) ctx.moveTo(px, py); else ctx.lineTo(px, py);
+  }
+  ctx.stroke();
+
+  ctx.beginPath();
+  for (let i = 0; i <= steps; i++) {
+    const t = i / steps;
+    const px = x + (1 - t) * w;
+    const py = y + h + Math.sin(seed * 1.7 + i * 0.79) * jitter;
+    if (i === 0) ctx.moveTo(px, py); else ctx.lineTo(px, py);
+  }
+  ctx.stroke();
+
+  ctx.beginPath();
+  for (let i = 0; i <= steps; i++) {
+    const t = i / steps;
+    const px = x + Math.sin(seed * 2.1 + i * 0.71) * jitter;
+    const py = y + (1 - t) * h;
+    if (i === 0) ctx.moveTo(px, py); else ctx.lineTo(px, py);
+  }
+  ctx.stroke();
+
+  ctx.restore();
+}
+
+function drawSketchyCircle(cx, cy, r, opts) {
+  opts = opts || {};
+  const fillColor   = opts.fill       || '#FFFFFF';
+  const borderColor = opts.borderColor|| '#000000';
+  const borderWidth = opts.borderWidth|| 4;
+  const jitter      = opts.jitter     || 1.8;
+  const seed        = (opts.seed || 0) + cx * 0.0137 + cy * 0.0271;
+
+  ctx.save();
+  ctx.fillStyle = fillColor;
+  ctx.beginPath();
+  ctx.arc(cx, cy, r, 0, Math.PI * 2);
+  ctx.fill();
+
+  ctx.strokeStyle = borderColor;
+  ctx.lineWidth = borderWidth;
+  ctx.lineCap = 'round';
+  ctx.lineJoin = 'round';
+
+  const steps = 64;
+  ctx.beginPath();
+  for (let i = 0; i <= steps; i++) {
+    const a = (i / steps) * Math.PI * 2;
+    const rr = r + Math.sin(seed + a * 3.2) * jitter;
+    const px = cx + Math.cos(a) * rr;
+    const py = cy + Math.sin(a) * rr;
+    if (i === 0) ctx.moveTo(px, py); else ctx.lineTo(px, py);
+  }
+  ctx.stroke();
+
+  ctx.restore();
+}
+
+function drawButtonLabel(x, y, w, h, text, opts) {
+  opts = opts || {};
+  const fontSize   = opts.fontSize   || 22;
+  const fontWeight = opts.fontWeight || 'bold';
+  const textColor  = opts.textColor  || '#FFD500';
+  const fontFamily = opts.fontFamily || FONT_UI;
+  const subText    = opts.subText    || '';
+  const subSize    = opts.subSize    || 13;
+  const subColor   = opts.subColor   || 'rgba(60,60,60,0.85)';
+
+  ctx.save();
+  ctx.font = fontWeight + ' ' + fontSize + 'px ' + fontFamily;
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.fillStyle = textColor;
+  const yMid = subText ? (y + h / 2 - 6) : (y + h / 2);
+  ctx.fillText(text, x + w / 2, yMid);
+  if (subText) {
+    ctx.font = subSize + 'px ' + fontFamily;
+    ctx.fillStyle = subColor;
+    ctx.fillText(subText, x + w / 2, y + h / 2 + fontSize * 0.55);
+  }
+  ctx.restore();
+}
+
+
 function drawCentered(text, font, rgb, y, alpha = 1) {
   ctx.save();
   ctx.font = font;
@@ -1813,163 +1939,126 @@ const SHOP_PETS = [
 ];
 
 function drawMenu() {
-  ctx.fillStyle = '#0b1018';
+  // 半透明白色蒙版，提升可读性
+  ctx.fillStyle = 'rgba(255,255,255,0.06)';
   ctx.fillRect(0, 0, W, H);
-  drawStars();
 
+  // ===== 标题：词域探险（放在带黑边白底的大矩形里）=====
+  const titleW = 560, titleH = 110;
+  const titleX = (W - titleW) / 2, titleY = 60;
+  drawSketchyRect(titleX, titleY, titleW, titleH, { seed: 11, jitter: 2.2, radius: 6 });
+  drawButtonLabel(titleX, titleY, titleW, titleH, '词域探险', {
+    fontSize: 56, textColor: '#000000', fontFamily: FONT_UI
+  });
+  // 副标题
   ctx.save();
-  ctx.font = 'bold 54px ' + FONT_UI;
+  ctx.font = '16px ' + FONT_UI;
   ctx.textAlign = 'center';
   ctx.textBaseline = 'middle';
-  const grad = ctx.createLinearGradient(0, 90, 0, 190);
-  grad.addColorStop(0, '#ffe9a3');
-  grad.addColorStop(0.5, '#ffcf5c');
-  grad.addColorStop(1, '#ff9d5c');
-  ctx.fillStyle = grad;
-  ctx.fillText('词域探险', W / 2, 120);
-  ctx.font = '18px ' + FONT_UI;
-  ctx.fillStyle = 'rgba(190,205,225,0.85)';
-  ctx.fillText('Word Realm Roguelike · 网页版', W / 2, 168);
+  ctx.fillStyle = '#222';
+  ctx.fillText('Word Realm Roguelike · 网页版', W / 2, titleY + titleH + 22);
   ctx.restore();
 
-  if (currentUser) {
-    ctx.save();
-    ctx.font = '13px ' + FONT_UI;
-    ctx.textAlign = 'right';
-    ctx.textBaseline = 'middle';
-    ctx.fillStyle = 'rgba(190,205,225,0.85)';
-    ctx.fillText('当前账号：' + currentUser, 1100, 168);
-    const lo = menuLogoutRect();
-    const loHover = pointInMenuRect(mouse, lo);
-    roundRectPath(lo.left, lo.top, lo.right - lo.left, lo.bottom - lo.top, 8);
-    ctx.fillStyle = loHover ? 'rgba(120,56,64,0.9)' : 'rgba(80,46,54,0.75)';
-    ctx.fill();
-    ctx.strokeStyle = 'rgba(220,120,130,0.85)';
-    ctx.lineWidth = 1.5;
-    ctx.stroke();
-    ctx.font = 'bold 14px ' + FONT_UI;
-    ctx.textAlign = 'center';
-    ctx.fillStyle = '#ffdce0';
-    ctx.fillText('退出登录', (lo.left + lo.right) / 2, (lo.top + lo.bottom) / 2);
-    ctx.restore();
-  }
-
+  // ===== 4 个难度按钮 =====
   for (let i = 0; i < MENU_DIFFS.length; i++) {
     drawDifficultyButton(i, MENU_DIFFS[i]);
   }
 
+  // ===== 开始冒险 =====
   const start = menuStartRect();
-  ctx.save();
-  ctx.fillStyle = selectedMode >= 2 ? 'rgba(88,199,255,0.18)' : 'rgba(40,50,64,0.6)';
-  roundRectPath(start.left, start.top, start.right - start.left, start.bottom - start.top, 10);
-  ctx.fill();
-  ctx.strokeStyle = 'rgba(120,210,255,0.9)';
-  ctx.lineWidth = 2;
-  ctx.stroke();
-  ctx.font = 'bold 22px ' + FONT_UI;
-  ctx.textAlign = 'center';
-  ctx.textBaseline = 'middle';
-  ctx.fillStyle = '#dff4ff';
-  ctx.fillText('开始冒险  ▶', (start.left + start.right) / 2, (start.top + start.bottom) / 2);
-  ctx.restore();
+  drawSketchyRect(start.left, start.top, start.right - start.left, start.bottom - start.top, {
+    seed: 21, jitter: 2.0, radius: 6
+  });
+  drawButtonLabel(start.left, start.top, start.right - start.left, start.bottom - start.top,
+    '开始冒险  ▶', {
+    fontSize: 24, textColor: '#FFD500',
+    subText: selectedMode >= 2 ? '已选择难度：' + selectedModeName : '请先选择难度',
+    subColor: selectedMode >= 2 ? 'rgba(60,60,60,0.85)' : 'rgba(120,120,120,0.7)'
+  });
 
+  // ===== 继续游戏 / 暂无存档 =====
+  const cont = menuContinueRect();
   if (saveData && saveData.hasContinue) {
-    const cont = menuContinueRect();
-    ctx.save();
-    ctx.fillStyle = 'rgba(120,220,160,0.14)';
-    roundRectPath(cont.left, cont.top, cont.right - cont.left, cont.bottom - cont.top, 10);
-    ctx.fill();
-    ctx.strokeStyle = 'rgba(140,230,170,0.85)';
-    ctx.lineWidth = 2;
-    ctx.stroke();
-    ctx.font = 'bold 20px ' + FONT_UI;
-    ctx.textAlign = 'center';
-    ctx.textBaseline = 'middle';
-    ctx.fillStyle = '#d9ffe6';
-    ctx.fillText('继续游戏（第 ' + (saveData.continueRoom || 1) + ' 间）', (cont.left + cont.right) / 2, (cont.top + cont.bottom) / 2);
-    ctx.restore();
+    drawSketchyRect(cont.left, cont.top, cont.right - cont.left, cont.bottom - cont.top, { seed: 31, jitter: 2.0, radius: 6 });
+    drawButtonLabel(cont.left, cont.top, cont.right - cont.left, cont.bottom - cont.top,
+      '继续游戏', { fontSize: 22, textColor: '#FFD500',
+      subText: '第 ' + (saveData.continueRoom || 1) + ' 间', subSize: 14 });
   } else {
-    const cont = menuContinueRect();
-    ctx.save();
-    ctx.fillStyle = 'rgba(255,255,255,0.05)';
-    roundRectPath(cont.left, cont.top, cont.right - cont.left, cont.bottom - cont.top, 10);
-    ctx.fill();
-    ctx.font = '16px ' + FONT_UI;
-    ctx.textAlign = 'center';
-    ctx.textBaseline = 'middle';
-    ctx.fillStyle = 'rgba(160,175,195,0.4)';
-    ctx.fillText('（暂无存档）', (cont.left + cont.right) / 2, (cont.top + cont.bottom) / 2);
-    ctx.restore();
+    drawSketchyRect(cont.left, cont.top, cont.right - cont.left, cont.bottom - cont.top, { seed: 32, jitter: 2.0, radius: 6 });
+    drawButtonLabel(cont.left, cont.top, cont.right - cont.left, cont.bottom - cont.top,
+      '继续游戏', { fontSize: 22, textColor: '#C0C0C0',
+      subText: '（暂无存档）', subSize: 14, subColor: 'rgba(120,120,120,0.7)' });
   }
 
+  // ===== 商店（宠物商城）=====
   const shop = menuShopRect();
-  ctx.save();
-  ctx.fillStyle = 'rgba(97,74,122,0.9)';
-  roundRectPath(shop.left, shop.top, shop.right - shop.left, shop.bottom - shop.top, 10);
-  ctx.fill();
-  ctx.strokeStyle = 'rgba(190,150,226,0.9)';
-  ctx.lineWidth = 2;
-  ctx.stroke();
-  ctx.font = 'bold 18px ' + FONT_UI;
-  ctx.textAlign = 'center';
-  ctx.textBaseline = 'middle';
-  ctx.fillStyle = '#f0e2ff';
-  ctx.fillText('宠物商城（金币 ' + (saveData ? saveData.coins : 0) + '）', (shop.left + shop.right) / 2, (shop.top + shop.bottom) / 2);
-  ctx.restore();
+  drawSketchyRect(shop.left, shop.top, shop.right - shop.left, shop.bottom - shop.top, { seed: 41, jitter: 2.0, radius: 6 });
+  drawButtonLabel(shop.left, shop.top, shop.right - shop.left, shop.bottom - shop.top,
+    '宠物商城', { fontSize: 22, textColor: '#FFD500',
+    subText: '金币 ' + (saveData ? saveData.coins : 0), subSize: 14 });
 
+  // ===== 退出游戏 =====
   const quit = menuQuitRect();
-  const quitHover = pointInMenuRect(mouse, quit);
-  ctx.save();
-  ctx.fillStyle = quitHover ? 'rgba(200,64,58,0.95)' : 'rgba(148,42,38,0.9)';
-  roundRectPath(quit.left, quit.top, quit.right - quit.left, quit.bottom - quit.top, 10);
-  ctx.fill();
-  ctx.strokeStyle = 'rgba(255,150,140,0.9)';
-  ctx.lineWidth = 2;
-  ctx.stroke();
-  ctx.font = 'bold 18px ' + FONT_UI;
-  ctx.textAlign = 'center';
-  ctx.textBaseline = 'middle';
-  ctx.fillStyle = '#ffe3e0';
-  ctx.fillText('退出游戏 ⏻', (quit.left + quit.right) / 2, (quit.top + quit.bottom) / 2);
-  ctx.restore();
+  drawSketchyRect(quit.left, quit.top, quit.right - quit.left, quit.bottom - quit.top, { seed: 51, jitter: 2.0, radius: 6 });
+  drawButtonLabel(quit.left, quit.top, quit.right - quit.left, quit.bottom - quit.top,
+    '退出游戏', { fontSize: 22, textColor: '#FFD500', subText: '⏻', subSize: 14 });
 
+  // ===== 退出登录（圆形按钮，仿"主页"风格）=====
+  if (currentUser) {
+    const cx = 1110, cy = 76, cr = 32;
+    drawSketchyCircle(cx, cy, cr, { seed: 61, jitter: 1.5 });
+    ctx.save();
+    ctx.font = 'bold 13px ' + FONT_UI;
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillStyle = '#FFD500';
+    ctx.fillText('退出', cx, cy - 4);
+    ctx.font = '10px ' + FONT_UI;
+    ctx.fillStyle = '#222';
+    ctx.fillText(currentUser, cx, cy + 9);
+    ctx.restore();
+    // 也要在鼠标可点的区域里把 rect 同步出去，方便 handleMenuClick 用
+    menuLogoutUserCircle = { cx: cx, cy: cy, r: cr };
+  }
+
+  // ===== 底部提示 =====
   ctx.save();
-  ctx.font = '14px ' + FONT_UI;
+  ctx.font = '13px ' + FONT_UI;
   ctx.textAlign = 'center';
-  ctx.fillStyle = 'rgba(160,175,195,0.65)';
-  ctx.fillText('WASD/方向键移动 · 鼠标瞄准 · 左键发射中文词块 · E 拾取 · Space 闪避 · Q 护盾 · H 治疗针剂 · Tab 记忆书 · F11 全屏', W / 2, 672);
+  ctx.fillStyle = 'rgba(220,225,235,0.75)';
+  ctx.fillText('WASD/方向键移动 · 鼠标瞄准 · 左键发射 · E 拾取 · Space 闪避 · Q 护盾 · H 治疗针剂 · Tab 记忆书 · F11 全屏', W / 2, 672);
   ctx.restore();
 
   if (shopOpen) drawShop();
 }
-
 function drawDifficultyButton(i, diff) {
   const r = menuDifficultyRect(i);
+  const w = r.right - r.left, h = r.bottom - r.top;
   const selected = selectedMode === diff.max;
-  ctx.save();
-  ctx.fillStyle = selected ? 'rgba(88,199,255,0.22)' : 'rgba(38,48,64,0.55)';
-  roundRectPath(r.left, r.top, r.right - r.left, r.bottom - r.top, 12);
-  ctx.fill();
-  ctx.strokeStyle = selected ? 'rgba(120,215,255,1)' : 'rgba(120,140,165,0.35)';
-  ctx.lineWidth = selected ? 2.5 : 1.5;
-  ctx.stroke();
-
-  ctx.font = 'bold 24px ' + FONT_UI;
-  ctx.textAlign = 'left';
-  ctx.textBaseline = 'middle';
-  ctx.fillStyle = selected ? '#e8f8ff' : '#c4d2e2';
-  ctx.fillText(diff.title, r.left + 22, r.top + 26);
-  ctx.font = '14px ' + FONT_UI;
-  ctx.fillStyle = selected ? 'rgba(160,225,255,0.9)' : 'rgba(150,170,195,0.75)';
-  ctx.fillText(diff.subtitle + '  ·  ' + diff.desc, r.left + 22, r.top + 52);
-
+  drawSketchyRect(r.left, r.top, w, h, {
+    seed: 70 + i * 5,
+    fill: selected ? '#FFE680' : '#FFFFFF',
+    borderColor: '#000000',
+    borderWidth: 4,
+    jitter: 2.0,
+    radius: 8
+  });
+  drawButtonLabel(r.left, r.top, w, h, diff.title, {
+    fontSize: 24, textColor: selected ? '#000000' : '#FFD500',
+    fontWeight: 'bold',
+    subText: diff.subtitle + ' · ' + diff.desc,
+    subSize: 13,
+    subColor: selected ? 'rgba(40,40,40,0.85)' : 'rgba(70,70,70,0.8)'
+  });
   if (selected) {
-    ctx.font = '16px ' + FONT_UI;
+    ctx.save();
+    ctx.font = 'bold 18px ' + FONT_UI;
     ctx.textAlign = 'right';
-    ctx.fillStyle = '#7fe0ff';
-    ctx.fillText('✓', r.right - 20, r.top + 26);
+    ctx.textBaseline = 'middle';
+    ctx.fillStyle = '#000000';
+    ctx.fillText('✓', r.right - 18, r.top + h / 2 - 6);
+    ctx.restore();
   }
-  ctx.restore();
 }
 
 function drawStars() {
@@ -2768,29 +2857,22 @@ function drawEndScreen(title) {
     ctx.fillText(w.meaning + '  (对 ' + (w.correctCount || 0) + ' / 错 ' + (w.wrongCount || 0) + ')', x + 170, yy);
   }
   ctx.restore();
-  // Two buttons: restart and back to menu
+  // Two buttons: restart and back to menu (手绘风格)
   const restartRect = { left: W / 2 - 220, top: 600, right: W / 2 - 20, bottom: 645 };
   const menuRect = { left: W / 2 + 20, top: 600, right: W / 2 + 220, bottom: 645 };
   endScreenRestartRect = restartRect;
   endScreenMenuRect = menuRect;
-  const hoverRestart = pointInMenuRect(mouse, restartRect);
-  const hoverMenu = pointInMenuRect(mouse, menuRect);
-  const fillRestart = hoverRestart ? 'rgba(96,180,140,0.95)' : 'rgba(58,108,82,0.95)';
-  const fillMenu = hoverMenu ? 'rgba(120,56,64,0.95)' : 'rgba(80,38,46,0.95)';
-  ctx.fillStyle = fillRestart;
-  ctx.strokeStyle = 'rgba(180,235,200,0.9)'; ctx.lineWidth = 2;
-  roundRectPath(restartRect.left, restartRect.top, restartRect.right - restartRect.left, restartRect.bottom - restartRect.top, 8); ctx.fill(); ctx.stroke();
-  ctx.fillStyle = fillMenu;
-  ctx.strokeStyle = 'rgba(220,140,150,0.9)';
-  roundRectPath(menuRect.left, menuRect.top, menuRect.right - menuRect.left, menuRect.bottom - menuRect.top, 8); ctx.fill(); ctx.stroke();
-  ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-  ctx.font = 'bold 18px ' + FONT_UI;
-  ctx.fillStyle = '#ffffff';
-  ctx.fillText('再来一局', (restartRect.left + restartRect.right) / 2, (restartRect.top + restartRect.bottom) / 2);
-  ctx.fillText('回主菜单', (menuRect.left + menuRect.right) / 2, (menuRect.top + menuRect.bottom) / 2);
+  drawSketchyRect(restartRect.left, restartRect.top, restartRect.right - restartRect.left, restartRect.bottom - restartRect.top, { seed: 200, jitter: 2.0, radius: 6 });
+  drawButtonLabel(restartRect.left, restartRect.top, restartRect.right - restartRect.left, restartRect.bottom - restartRect.top, '再来一局', { fontSize: 19, textColor: '#FFD500' });
+  drawSketchyRect(menuRect.left, menuRect.top, menuRect.right - menuRect.left, menuRect.bottom - menuRect.top, { seed: 201, jitter: 2.0, radius: 6 });
+  drawButtonLabel(menuRect.left, menuRect.top, menuRect.right - menuRect.left, menuRect.bottom - menuRect.top, '回主菜单', { fontSize: 19, textColor: '#FFD500' });
+  ctx.save();
   ctx.font = '12px ' + FONT_UI;
-  ctx.fillStyle = 'rgba(190,205,225,0.8)';
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.fillStyle = 'rgba(220,225,235,0.85)';
   ctx.fillText('提示：按 R 再来一局 / M 回主菜单', W / 2, 670);
+  ctx.restore();
 }
 /* ============================================================
  * 第五部分：输入、菜单点击、主循环、启动
@@ -2861,9 +2943,12 @@ function handleMenuClick(p) {
     playSound('ui_click');
     shopOpen = true;
   }
-  if (currentUser && pointInMenuRect(p, menuLogoutRect())) {
-    playSound('ui_click');
-    logout();
+  if (currentUser && menuLogoutUserCircle) {
+    const dx = p.x - menuLogoutUserCircle.cx, dy = p.y - menuLogoutUserCircle.cy;
+    if (dx*dx + dy*dy <= menuLogoutUserCircle.r * menuLogoutUserCircle.r) {
+      playSound('ui_click');
+      logout();
+    }
   }
   if (pointInMenuRect(p, menuQuitRect())) {
     playSound('ui_click');
@@ -2893,43 +2978,26 @@ function drawQuitConfirm() {
   ctx.save();
   ctx.fillStyle = 'rgba(6,8,12,0.72)';
   ctx.fillRect(0, 0, W, H);
-  ctx.fillStyle = 'rgba(24,30,42,0.98)';
-  roundRectPath(W / 2 - 260, 210, 520, 230, 14);
-  ctx.fill();
-  ctx.strokeStyle = 'rgba(220,140,150,0.8)';
-  ctx.lineWidth = 2;
-  ctx.stroke();
-  ctx.textAlign = 'center';
-  ctx.textBaseline = 'middle';
-  ctx.font = 'bold 26px ' + FONT_UI;
-  ctx.fillStyle = '#ffdce0';
-  ctx.fillText('确定退出游戏吗？', W / 2, 262);
-  ctx.font = '14px ' + FONT_UI;
-  ctx.fillStyle = 'rgba(200,210,225,0.85)';
-  ctx.fillText('退出前会自动保存进度，之后需要重新进入游戏', W / 2, 296);
 
   const yes = quitYesRect();
   const no = quitNoRect();
-  const yesHover = pointInMenuRect(mouse, yes);
-  const noHover = pointInMenuRect(mouse, no);
-  ctx.fillStyle = yesHover ? 'rgba(210,80,70,0.98)' : 'rgba(160,52,46,0.95)';
-  roundRectPath(yes.left, yes.top, yes.right - yes.left, yes.bottom - yes.top, 8);
-  ctx.fill();
-  ctx.strokeStyle = 'rgba(255,170,160,0.9)';
-  ctx.lineWidth = 2;
-  ctx.stroke();
-  ctx.font = 'bold 17px ' + FONT_UI;
-  ctx.fillStyle = '#fff';
-  ctx.fillText('退出游戏', (yes.left + yes.right) / 2, (yes.top + yes.bottom) / 2);
+  // 提示文字（带白底卡片让按钮在深色上不糊）
+  drawSketchyRect(W / 2 - 260, 210, 520, 230, { seed: 220, jitter: 2.0, radius: 10, fill: '#FFFFFF' });
+  ctx.save();
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.font = 'bold 26px ' + FONT_UI;
+  ctx.fillStyle = '#000000';
+  ctx.fillText('确定退出游戏吗？', W / 2, 262);
+  ctx.font = '14px ' + FONT_UI;
+  ctx.fillStyle = 'rgba(60,60,60,0.85)';
+  ctx.fillText('退出前会自动保存进度，之后需要重新进入游戏', W / 2, 296);
+  ctx.restore();
 
-  ctx.fillStyle = noHover ? 'rgba(90,104,126,0.98)' : 'rgba(60,72,92,0.95)';
-  roundRectPath(no.left, no.top, no.right - no.left, no.bottom - no.top, 8);
-  ctx.fill();
-  ctx.strokeStyle = 'rgba(170,185,205,0.8)';
-  ctx.lineWidth = 2;
-  ctx.stroke();
-  ctx.fillStyle = '#e8eef5';
-  ctx.fillText('取消', (no.left + no.right) / 2, (no.top + no.bottom) / 2);
+  drawSketchyRect(yes.left, yes.top, yes.right - yes.left, yes.bottom - yes.top, { seed: 221, jitter: 1.8, radius: 6 });
+  drawButtonLabel(yes.left, yes.top, yes.right - yes.left, yes.bottom - yes.top, '退出游戏', { fontSize: 18, textColor: '#D05050' });
+  drawSketchyRect(no.left, no.top, no.right - no.left, no.bottom - no.top, { seed: 222, jitter: 1.8, radius: 6 });
+  drawButtonLabel(no.left, no.top, no.right - no.left, no.bottom - no.top, '取消', { fontSize: 18, textColor: '#FFD500' });
   ctx.restore();
 }
 
@@ -2947,16 +3015,8 @@ function drawQuitScreen() {
   ctx.fillText('进度已保存，感谢游玩词域探险！', W / 2, 280);
 
   const re = quitReenterRect();
-  const reHover = pointInMenuRect(mouse, re);
-  ctx.fillStyle = reHover ? 'rgba(110,190,255,0.98)' : 'rgba(70,150,215,0.95)';
-  roundRectPath(re.left, re.top, re.right - re.left, re.bottom - re.top, 10);
-  ctx.fill();
-  ctx.strokeStyle = 'rgba(180,225,255,0.9)';
-  ctx.lineWidth = 2;
-  ctx.stroke();
-  ctx.font = 'bold 20px ' + FONT_UI;
-  ctx.fillStyle = '#fff';
-  ctx.fillText('重新进入游戏', (re.left + re.right) / 2, (re.top + re.bottom) / 2);
+  drawSketchyRect(re.left, re.top, re.right - re.left, re.bottom - re.top, { seed: 240, jitter: 2.0, radius: 8 });
+  drawButtonLabel(re.left, re.top, re.right - re.left, re.bottom - re.top, '重新进入游戏', { fontSize: 22, textColor: '#FFD500' });
   ctx.restore();
 }
 
@@ -2969,34 +3029,33 @@ function shopCloseRect() {
 }
 
 function drawShop() {
-  ctx.fillStyle = 'rgba(6,8,12,0.62)';
+  // 半透明黑色蒙版
+  ctx.fillStyle = 'rgba(6,8,12,0.55)';
   ctx.fillRect(0, 0, W, H);
   ctx.save();
-  ctx.fillStyle = 'rgba(22,28,36,0.97)';
-  roundRectPath(240, 78, 800, 570, 10);
-  ctx.fill();
-  ctx.strokeStyle = 'rgba(160,120,220,0.7)';
-  ctx.lineWidth = 2;
-  ctx.stroke();
+  // 面板：白底黑边手绘风格
+  const panelX = 240, panelY = 78, panelW = 800, panelH = 570;
+  drawSketchyRect(panelX, panelY, panelW, panelH, { seed: 100, jitter: 2.5, radius: 10, fill: '#FFFFFF' });
+  // 标题
+  drawButtonLabel(panelX, panelY + 10, panelW, 60, '宠物商城', {
+    fontSize: 34, textColor: '#000000'
+  });
+  // 金币副标题
+  ctx.save();
+  ctx.font = '15px ' + FONT_UI;
   ctx.textAlign = 'center';
   ctx.textBaseline = 'middle';
-  ctx.font = 'bold 30px ' + FONT_UI;
-  ctx.fillStyle = '#f0e2ff';
-  ctx.fillText('宠物商城', W / 2, 128);
-  ctx.font = '15px ' + FONT_UI;
-  ctx.fillStyle = '#ffd65c';
-  ctx.fillText('金币 ' + saveData.coins + '  打怪可得金币，数量随怪物强度提升', W / 2, 170);
+  ctx.fillStyle = '#222';
+  ctx.fillText('金币 ' + saveData.coins + '   打怪可得金币，数量随怪物强度提升', W / 2, 160);
+  ctx.restore();
   for (let i = 0; i < SHOP_PETS.length; i++) drawShopPetCard(i);
+  // 关闭按钮
   const close = shopCloseRect();
-  roundRectPath(close.left, close.top, close.right - close.left, close.bottom - close.top, 8);
-  ctx.fillStyle = 'rgba(120,56,64,0.95)';
-  ctx.fill();
-  ctx.strokeStyle = 'rgba(220,120,130,0.8)';
-  ctx.lineWidth = 1.5;
-  ctx.stroke();
-  ctx.font = 'bold 15px ' + FONT_UI;
-  ctx.fillStyle = '#ffdce0';
-  ctx.fillText('关闭（Esc）', (close.left + close.right) / 2, (close.top + close.bottom) / 2);
+  const cw = close.right - close.left, ch = close.bottom - close.top;
+  drawSketchyRect(close.left, close.top, cw, ch, { seed: 110, jitter: 1.8, radius: 6 });
+  drawButtonLabel(close.left, close.top, cw, ch, '关闭（Esc）', {
+    fontSize: 16, textColor: '#FFD500'
+  });
   ctx.restore();
 }
 
@@ -3006,28 +3065,32 @@ function drawShopPetCard(i) {
   const owned = saveData.ownedPets.includes(pet.id);
   const canBuy = !owned && saveData.coins >= pet.price;
   const hover = pointInMenuRect(mouse, r);
+  const w = r.right - r.left, h = r.bottom - r.top;
+  // 卡片底
+  drawSketchyRect(r.left, r.top, w, h, {
+    seed: 120 + i * 7,
+    jitter: 1.8,
+    radius: 8,
+    fill: owned ? '#E8F4E5' : (hover ? '#FFF7D6' : '#FFFFFF'),
+    borderWidth: 3
+  });
+  // 文字
   ctx.save();
-  roundRectPath(r.left, r.top, r.right - r.left, r.bottom - r.top, 8);
-  ctx.fillStyle = owned ? 'rgba(36,52,44,0.96)' : (hover ? (canBuy ? 'rgba(62,74,92,0.96)' : 'rgba(48,54,62,0.96)') : 'rgba(42,50,62,0.96)');
-  ctx.fill();
-  ctx.strokeStyle = owned ? 'rgba(120,220,150,0.9)' : (canBuy ? 'rgba(210,180,110,0.9)' : 'rgba(90,100,116,0.8)');
-  ctx.lineWidth = 1.5;
-  ctx.stroke();
   ctx.textAlign = 'left';
   ctx.textBaseline = 'middle';
-  ctx.font = 'bold 17px ' + FONT_UI;
-  ctx.fillStyle = '#fff';
-  ctx.fillText(pet.name, r.left + 78, r.top + 16);
+  ctx.font = 'bold 18px ' + FONT_UI;
+  ctx.fillStyle = owned ? '#2c5e2c' : '#000000';
+  ctx.fillText(pet.name, r.left + 78, r.top + 18);
   ctx.font = '13px ' + FONT_UI;
-  ctx.fillStyle = 'rgba(186,200,214,0.95)';
-  ctx.fillText(pet.desc, r.left + 78, r.top + 42);
+  ctx.fillStyle = 'rgba(50,50,50,0.9)';
+  ctx.fillText(pet.desc, r.left + 78, r.top + 44);
   ctx.textAlign = 'right';
   ctx.font = 'bold 15px ' + FONT_UI;
-  if (owned) { ctx.fillStyle = '#8ce6a5'; ctx.fillText('已拥有', r.right - 20, r.top + 30); }
-  else if (canBuy) { ctx.fillStyle = '#ffd65c'; ctx.fillText('购买 ' + pet.price + ' 金币', r.right - 20, r.top + 30); }
-  else { ctx.fillStyle = 'rgba(180,190,200,0.9)'; ctx.fillText('金币不足 ' + pet.price, r.right - 20, r.top + 30); }
-  drawPetCreature(pet.id, r.left + 40, r.top + 31);
+  if (owned) { ctx.fillStyle = '#2c8e4a'; ctx.fillText('已拥有', r.right - 18, r.top + 30); }
+  else if (canBuy) { ctx.fillStyle = '#B8860B'; ctx.fillText('购买 ' + pet.price + ' 金币', r.right - 18, r.top + 30); }
+  else { ctx.fillStyle = '#888'; ctx.fillText('金币不足 ' + pet.price, r.right - 18, r.top + 30); }
   ctx.restore();
+  drawPetCreature(pet.id, r.left + 40, r.top + 31);
 }
 
 function handleShopClick(p) {

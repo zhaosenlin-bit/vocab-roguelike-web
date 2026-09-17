@@ -35,48 +35,82 @@
     position: fixed; left: 12px; bottom: 8px; z-index: 5;
     font-size: 12px; color: #5d6a7a; letter-spacing: 1px;
   }
-  /* ---------- 登录界面 ---------- */
+  /* ---------- 登录界面（手绘黑边 / 白底 / 黄字） ---------- */
   #login {
     position: fixed; inset: 0; z-index: 50;
     display: flex; align-items: center; justify-content: center;
     background: radial-gradient(ellipse at center, #15203a 0%, #06090f 70%);
   }
   .login-card {
-    background: rgba(18,24,36,0.96);
-    border: 1px solid rgba(120,160,210,0.25);
+    background: #FFFFFF;
+    border: 3px solid #000000;
     border-radius: 14px;
-    padding: 30px 36px 24px;
-    width: 380px;
-    box-shadow: 0 12px 48px rgba(0,0,0,0.6);
+    padding: 30px 36px 26px;
+    width: 400px;
+    box-shadow: 8px 8px 0 rgba(0,0,0,0.85);
+    position: relative;
   }
-  .login-title { margin: 0 0 18px; font-size: 22px; color: #ffe9a3; text-align: center; letter-spacing: 2px; font-weight: bold; }
-  .login-tabs { display: flex; margin-bottom: 14px; border-radius: 8px; overflow: hidden; border: 1px solid rgba(120,160,210,0.3); }
-  .login-tab { flex: 1; padding: 9px 0; background: rgba(40,52,72,0.6); color: #c4d2e2; border: none; cursor: pointer; font-size: 14px; font-family: inherit; }
-  .login-tab.active { background: rgba(88,160,220,0.4); color: #fff; }
+  .login-card::before, .login-card::after {
+    content: ""; position: absolute; inset: 6px; border-radius: 10px;
+    pointer-events: none;
+  }
+  .login-title {
+    margin: 0 0 20px; font-size: 24px; color: #000000;
+    text-align: center; letter-spacing: 2px; font-weight: bold;
+  }
+  .login-title span { color: #FFD500; }
+  .login-tabs {
+    display: flex; margin-bottom: 14px; gap: 8px;
+  }
+  .login-tab {
+    flex: 1; padding: 9px 0;
+    background: #FFFFFF; color: #FFD500;
+    border: 3px solid #000000; border-radius: 8px;
+    cursor: pointer; font-size: 15px; font-weight: bold;
+    font-family: inherit;
+    transition: transform .08s ease;
+  }
+  .login-tab:hover { transform: translate(-1px,-1px); box-shadow: 2px 2px 0 #000; }
+  .login-tab.active {
+    background: #FFD500; color: #000000;
+  }
   .login-input {
     width: 100%; box-sizing: border-box; padding: 10px 12px; margin-bottom: 10px;
-    background: rgba(20,28,42,0.9); border: 1px solid rgba(120,160,210,0.3);
-    border-radius: 6px; color: #e8eef5; font-size: 14px; outline: none;
+    background: #FFFFFF; border: 3px solid #000000;
+    border-radius: 8px; color: #000000; font-size: 14px; outline: none;
     font-family: inherit;
   }
-  .login-input:focus { border-color: rgba(120,200,255,0.7); }
-  .login-error { min-height: 18px; color: #ff8896; font-size: 12px; margin-bottom: 6px; text-align: center; }
+  .login-input:focus { background: #FFFCEB; }
+  .login-input::placeholder { color: #888; }
+  .login-error {
+    min-height: 18px; color: #D04040; font-size: 12px;
+    margin-bottom: 6px; text-align: center; font-weight: bold;
+  }
   .login-btn {
-    width: 100%; padding: 10px; border: none; border-radius: 8px;
-    font-size: 15px; cursor: pointer; margin-bottom: 8px;
-    font-family: inherit;
+    width: 100%; padding: 12px; border: 3px solid #000000; border-radius: 10px;
+    font-size: 16px; cursor: pointer; margin-bottom: 10px;
+    font-family: inherit; font-weight: bold;
+    background: #FFFFFF; color: #FFD500;
+    transition: transform .08s ease, box-shadow .08s ease;
   }
-  .login-btn.primary { background: linear-gradient(180deg, #69c1ff, #3a8acc); color: #fff; font-weight: bold; }
-  .login-btn.primary:hover { background: linear-gradient(180deg, #7fcfff, #4a9adc); }
-  .login-btn.secondary { background: rgba(80,70,110,0.6); color: #e0d8f0; }
-  .login-btn.secondary:hover { background: rgba(100,86,130,0.7); }
-  .login-hint { margin-top: 10px; font-size: 11px; color: #6d7a8a; text-align: center; line-height: 1.5; }
+  .login-btn:hover { transform: translate(-2px,-2px); box-shadow: 3px 3px 0 #000; }
+  .login-btn:active { transform: translate(0,0); box-shadow: none; }
+  .login-btn.primary {
+    background: #FFD500; color: #000000;
+  }
+  .login-btn.secondary {
+    background: #FFFFFF; color: #FFD500;
+  }
+  .login-hint {
+    margin-top: 10px; font-size: 11px; color: #555;
+    text-align: center; line-height: 1.5;
+  }
 </style>
 </head>
 <body>
 <div id="login" style="display:none;">
   <div class="login-card">
-    <h1 class="login-title">词域探险 · 账号登录</h1>
+    <h1 class="login-title">词<span>域</span>探险 · 账号登录</h1>
     <div class="login-tabs">
       <button class="login-tab active" data-mode="login" type="button">登录</button>
       <button class="login-tab" data-mode="register" type="button">注册</button>
@@ -93,6 +127,6 @@
 <div id="loading" style="display:none;"><div>正在加载词库与素材…</div><div class="bar"><div class="fill" id="fill"></div></div><div id="loadText">0%</div></div>
 <div id="wrap"><canvas id="game" width="1280" height="720"></canvas></div>
 <div id="hint">操作：WASD 移动 · 鼠标瞄准 · 左键发射 · E 拾取/开箱 · Space 闪避 · Q 护盾药 · H 治疗针剂 · Tab 记忆书 · F11 全屏</div>
-<script src="game.js?v=7"></script>
+<script src="game.js?v=8"></script>
 </body>
 </html>
